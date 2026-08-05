@@ -1,0 +1,67 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+authors = ["Semen Loktionov <loktionov.kh@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/napalmpapalam/herdr-quotr"
+
+[workspace.dependencies]
+anyhow = "1"
+ratatui = "0.30"
+herdr = { path = "crates/herdr" }
+ui = { path = "crates/ui" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+unreachable_pub = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+wildcard_imports = "deny"
+# Pragmatic allows for an application binary (vs a public library):
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+
+# The binary: terminal lifecycle and the event loop. All logic lives in `crates/*`.
+[package]
+name = "herdr-quotr"
+description = "Quote an agent's own response back at it, from a herdr popup."
+readme = "README.md"
+keywords = ["herdr", "tui", "agent", "claude", "quote"]
+categories = ["command-line-utilities", "development-tools"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+ratatui.workspace = true
+herdr.workspace = true
+ui.workspace = true
+
+[lints]
+workspace = true
+
+[profile.release]
+strip = true
+lto = "thin"

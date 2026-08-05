@@ -1,0 +1,14 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# macOS
+.DS_Store
+
+# editor / local
+.idea/
+.vscode/
+*.swp
+
+# The binary the plugin pane runs; built locally, never committed.
+/bin/

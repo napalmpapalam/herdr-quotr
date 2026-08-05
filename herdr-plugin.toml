@@ -1,0 +1,21 @@
+id = "napalmpapalam.quotr"
+name = "quotr"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+platforms = ["macos", "linux"]
+description = "Quote an agent's own response back at it, from a herdr popup."
+
+# The picker runs the binary by absolute path under the plugin root: the pane's cwd is the
+# agent's repo, not the plugin root, and the binary isn't on PATH. Build it with
+# `cargo build --release && install -D target/release/herdr-quotr bin/herdr-quotr`.
+[[panes]]
+id = "picker"
+title = "quotr"
+placement = "popup"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-quotr\""]
+
+[[actions]]
+id = "open"
+title = "quotr: quote the agent's answer"
+contexts = ["pane"]
+command = ["bash", "herdr/open.sh"]
