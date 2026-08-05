@@ -1,7 +1,8 @@
-//! herdr host integration: write into the origin agent's input and hand focus back.
-//!
-//! The origin pane id arrives as `QUOTR_AGENT_PANE`, set by `herdr/open.sh` when it
-//! opens the picker — so nothing here has to resolve which agent we came from.
+//! herdr host integration: resolve the origin agent, write to its input, focus it back.
+
+mod agent;
+
+pub use crate::agent::{Status, session as agent_session, status as agent_status};
 
 use std::{env, fmt, process::Command};
 
@@ -15,7 +16,7 @@ pub const AGENT_PANE_ENV: &str = "QUOTR_AGENT_PANE";
 pub struct PaneId(String);
 
 impl PaneId {
-    fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -26,7 +27,7 @@ impl fmt::Display for PaneId {
     }
 }
 
-fn herdr(args: &[&str]) -> Result<String> {
+pub(crate) fn herdr(args: &[&str]) -> Result<String> {
     let bin = env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".to_string());
     let out =
         Command::new(bin).args(args).output().with_context(|| format!("running herdr {args:?}"))?;
@@ -43,8 +44,8 @@ pub fn agent_pane() -> Option<PaneId> {
 
 /// Write literal text into the agent pane's input, without submitting.
 ///
-/// `pane send-text` honors the pane's live bracketed-paste mode, which is what keeps a
-/// multi-line block from executing at the first newline. Claude Code enables it.
+/// Relies on the pane's bracketed-paste mode to stop a multi-line block executing at the
+/// first newline — Claude Code enables it, a bare shell does not.
 pub fn send_text(pane: &PaneId, text: &str) -> Result<()> {
     herdr(&["pane", "send-text", pane.as_str(), text])?;
     Ok(())

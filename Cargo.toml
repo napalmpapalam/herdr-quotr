@@ -11,9 +11,18 @@ license = "MIT"
 repository = "https://github.com/napalmpapalam/herdr-quotr"
 
 [workspace.dependencies]
-anyhow = "1"
-ratatui = "0.30"
+anyhow = { version = "1", default-features = false, features = ["std"] }
+# Dropped from ratatui's defaults: `all-widgets` (calendar only), `macros`, and
+# `underline-color`. `layout-cache` stays — the picker re-solves its layout every frame.
+ratatui = { version = "0.30", default-features = false, features = ["crossterm", "layout-cache"] }
+serde = { version = "1", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "1", default-features = false, features = ["std"] }
+# `cjk` is a default, kept deliberately: transcripts carry wide glyphs and the wrap is
+# width-aware.
+unicode-width = { version = "0.2", default-features = false, features = ["cjk"] }
+export = { path = "crates/export" }
 herdr = { path = "crates/herdr" }
+transcript = { path = "crates/transcript" }
 ui = { path = "crates/ui" }
 
 [workspace.lints.rust]
@@ -56,7 +65,11 @@ repository.workspace = true
 [dependencies]
 anyhow.workspace = true
 ratatui.workspace = true
+export.workspace = true
 herdr.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+transcript.workspace = true
 ui.workspace = true
 
 [lints]
