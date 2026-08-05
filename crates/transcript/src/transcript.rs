@@ -31,15 +31,6 @@ impl Transcript {
         &self.lines
     }
 
-    /// First line of the newest agent turn — where the picker opens.
-    pub fn last_answer(&self) -> Option<usize> {
-        self.starts
-            .iter()
-            .rev()
-            .copied()
-            .find(|&i| self.lines.get(i).is_some_and(|l| l.kind == LineKind::Agent))
-    }
-
     /// The characters `from..=to` covers, as quotable lines.
     ///
     /// The first and last lines are cut at their columns; whole lines in between come as
@@ -168,7 +159,7 @@ mod tests {
         // One user turn, one agent turn — the tool round trip between them is not a turn.
         assert_eq!(t.next_turn(0), Some(2));
         assert_eq!(t.next_turn(2), None);
-        assert_eq!(t.last_answer(), Some(2));
+        assert_eq!(t.prev_turn(5), Some(2));
     }
 
     #[test]

@@ -8,9 +8,14 @@ pub fn block(lines: &[&str], question: Option<&str>) -> String {
     question.map(|q| format!("{quote}\n\n{q}")).unwrap_or(quote)
 }
 
+/// Join composed blocks with the `---` rule that separates them by hand.
+pub fn batch(blocks: &[String]) -> String {
+    blocks.join("\n\n---\n\n")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::block;
+    use super::{batch, block};
 
     #[test]
     fn wraps_the_whole_range_in_one_quote_pair() {
@@ -26,5 +31,16 @@ mod tests {
     fn leaves_markdown_inside_the_quote_untouched() {
         let lines = ["```rust", "let x = 1;", "```"];
         assert_eq!(block(&lines, None), "\"```rust\nlet x = 1;\n```\"");
+    }
+
+    #[test]
+    fn separates_blocks_with_a_rule_on_its_own_line() {
+        let blocks = [block(&["one"], Some("why?")), block(&["two"], Some("and?"))];
+        assert_eq!(batch(&blocks), "\"one\"\n\nwhy?\n\n---\n\n\"two\"\n\nand?");
+    }
+
+    #[test]
+    fn a_lone_block_gets_no_rule() {
+        assert_eq!(batch(&[block(&["one"], None)]), "\"one\"");
     }
 }

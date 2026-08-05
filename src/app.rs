@@ -8,14 +8,15 @@ use herdr::{AGENT_PANE_ENV, PaneId};
 use transcript::{Pos, SessionId, Transcript};
 use ui::Painted;
 
-use crate::stash;
+use crate::{bank::Bank, stash};
 
 /// Whether the question box is up.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     #[default]
     Browse,
-    Ask,
+    /// Typing a question; `editing` is the bank index when reopening a banked pair.
+    Ask { editing: Option<usize> },
 }
 
 /// How much of a line a selection takes: exactly the characters crossed, or all of them.
@@ -35,11 +36,15 @@ pub struct App {
     pub transcript: Transcript,
     /// Character the caret sits on.
     pub cursor: Pos,
-    /// First source line painted.
+    /// First source line painted. Meaningless until [`App::settle`] runs.
     pub scroll: usize,
+    /// True until the first frame has resolved where the picker opens.
+    pub opening: bool,
     /// Where the live selection started; `None` when nothing is selected.
     pub anchor: Option<Pos>,
     pub grain: Grain,
+    /// Pairs finished and waiting for `S`.
+    pub bank: Bank,
     pub mode: Mode,
     pub question: String,
     /// What the last frame put on screen — drives scrolling and mouse hit testing.
@@ -57,15 +62,17 @@ impl App {
             }
             Err(e) => (None, Transcript::default(), format!("{e:#}")),
         };
-        let line = transcript.last_answer().unwrap_or(0);
+        let last = transcript.lines().len().saturating_sub(1);
         let mut app = Self {
             agent_pane,
             session,
             transcript,
-            cursor: Pos::line_start(line),
-            scroll: line,
+            cursor: Pos::line_start(last),
+            scroll: 0,
+            opening: true,
             anchor: None,
             grain: Grain::Char,
+            bank: Bank::default(),
             mode: Mode::Browse,
             question: String::new(),
             painted: Painted::default(),
@@ -74,6 +81,16 @@ impl App {
         };
         app.restore();
         app
+    }
+
+    /// Adopt the scroll the first frame worked out. Where the newest line sits depends on how
+    /// every line above it wraps, so only the paint layer can say.
+    pub fn settle(&mut self) {
+        if !self.opening {
+            return;
+        }
+        self.opening = false;
+        self.scroll = self.painted.top();
     }
 
     /// The range that would be quoted right now, in reading order.
@@ -107,8 +124,19 @@ impl App {
         self.grain = Grain::Char;
     }
 
+    pub fn asking(&self) -> bool {
+        matches!(self.mode, Mode::Ask { .. })
+    }
+
+    /// Open the question box over the live selection. Without one there is nothing to quote —
+    /// `e` is what reopens a banked pair.
     pub fn ask(&mut self) {
-        self.mode = Mode::Ask;
+        let (from, to) = self.range();
+        if self.anchor.is_none() || self.transcript.slice(from, to).is_empty() {
+            "nothing selected".clone_into(&mut self.status);
+            return;
+        }
+        self.mode = Mode::Ask { editing: None };
         self.question.clear();
     }
 
@@ -124,18 +152,24 @@ impl App {
         self.question.pop();
     }
 
-    /// Pick up a selection a previous run parked because the agent was blocked.
+    /// Pick up a batch a previous run parked because the agent was blocked.
     fn restore(&mut self) {
         let Some(pending) = self.session.as_ref().and_then(stash::take) else { return };
-        if self.transcript.clamp(pending.to) != pending.to {
-            return; // the transcript no longer lines up; better to drop it than mis-quote
+        // Any pair that no longer lines up drops the whole batch: mis-quoting one of them is
+        // worse than restoring none, and the user still has the transcript in front of them.
+        if pending.pairs.is_empty()
+            || pending.pairs.iter().any(|pair| self.transcript.clamp(pair.to) != pair.to)
+        {
+            return;
         }
-        self.anchor = Some(pending.from);
-        self.cursor = pending.to;
-        self.scroll = pending.from.line;
-        self.question = pending.question;
-        self.mode = Mode::Ask;
-        "restored your parked quote — enter sends it".clone_into(&mut self.status);
+        let count = pending.pairs.len();
+        if let Some(first) = pending.pairs.first() {
+            self.cursor = first.from;
+            self.scroll = first.from.line;
+            self.opening = false; // the batch's own position beats opening at the newest line
+        }
+        self.bank = Bank::from(pending.pairs);
+        self.status = format!("restored {count} parked pair(s) — S sends");
     }
 }
 

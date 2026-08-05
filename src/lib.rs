@@ -1,6 +1,7 @@
 //! herdr-quotr — quote an agent's own response back at it.
 
 pub mod app;
+mod bank;
 mod nav;
 mod send;
 mod stash;
@@ -21,7 +22,7 @@ use ratatui::{
 use transcript::{LineKind, Pos};
 use ui::{Painted, Tone};
 
-use crate::app::{App, Grain, Mode};
+use crate::app::{App, Grain};
 
 /// Source lines a wheel notch moves the viewport — the conventional step.
 const WHEEL: isize = 3;
@@ -40,6 +41,9 @@ pub fn run() -> Result<()> {
 }
 
 fn event_loop(terminal: &mut DefaultTerminal, app: &mut App) -> Result<()> {
+    // One measuring frame first: where the picker opens depends on how many lines fit.
+    app.painted = draw(terminal, app)?;
+    app.settle();
     while !app.should_quit {
         app.painted = draw(terminal, app)?;
         match event::read()? {
@@ -58,12 +62,24 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
         .iter()
         .map(|line| ui::SourceLine { text: &line.text, tone: tone(line.kind) })
         .collect();
+    let banked: Vec<ui::Banked<'_>> = app
+        .bank
+        .iter()
+        .enumerate()
+        .map(|(index, pair)| ui::Banked {
+            number: index + 1,
+            from: pair.from.line,
+            to: pair.to.line,
+            question: pair.question.trim(),
+        })
+        .collect();
     let view = ui::View {
         lines: &lines,
         cursor: to_screen(app.cursor),
         selection: app.selection().map(|(from, to)| (to_screen(from), to_screen(to))),
-        scroll: app.scroll,
-        question: (app.mode == Mode::Ask).then_some(app.question.as_str()),
+        banked: &banked,
+        scroll: if app.opening { ui::Scroll::Bottom } else { ui::Scroll::From(app.scroll) },
+        question: app.asking().then_some(app.question.as_str()),
         status: &app.status,
     };
     let mut painted = Painted::default();
@@ -85,7 +101,7 @@ fn tone(kind: LineKind) -> Tone {
 }
 
 fn handle_key(app: &mut App, key: KeyEvent) {
-    if app.mode == Mode::Ask {
+    if app.asking() {
         handle_ask_key(app, key);
         return;
     }
@@ -105,6 +121,8 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('v') => app.toggle_range(Grain::Char),
         KeyCode::Char('V') => app.toggle_range(Grain::Line),
         KeyCode::Char('C' | 'c') => app.ask(),
+        KeyCode::Char('E' | 'e') => app.edit_pair(),
+        KeyCode::Char('D' | 'd') => app.delete_pair(),
         KeyCode::Char('S' | 's') => app.send(),
         _ => {}
     }
@@ -114,7 +132,7 @@ fn handle_ask_key(app: &mut App, key: KeyEvent) {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     match key.code {
         KeyCode::Esc => app.cancel_ask(),
-        KeyCode::Enter => app.send(),
+        KeyCode::Enter => app.bank_pair(),
         KeyCode::Backspace => app.backspace(),
         KeyCode::Char('u') if ctrl => app.question.clear(),
         KeyCode::Char(c) if !ctrl => app.type_char(c),
@@ -123,7 +141,7 @@ fn handle_ask_key(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_mouse(app: &mut App, mouse: MouseEvent) {
-    if app.mode == Mode::Ask {
+    if app.asking() {
         return;
     }
     let cell = app.painted.hit(mouse.column, mouse.row);

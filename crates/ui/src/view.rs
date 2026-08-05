@@ -28,6 +28,28 @@ pub struct Pos {
     pub col: usize,
 }
 
+/// A banked quote+question pair, in the shape the gutter and its card need.
+#[derive(Debug, Clone, Copy)]
+pub struct Banked<'a> {
+    /// What the gutter prints, counting from 1.
+    pub number: usize,
+    /// First and last source line the pair covers — the marked range.
+    pub from: usize,
+    pub to: usize,
+    /// Empty for a bare quote, which gets a gutter mark but no card.
+    pub question: &'a str,
+}
+
+/// Where the buffer starts painting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scroll {
+    /// From this source line, downward.
+    From(usize),
+    /// Far enough back that the last line lands on the bottom row — how the picker opens.
+    /// Only the paint layer can resolve it: it depends on how each line wraps.
+    Bottom,
+}
+
 /// Everything the picker paints, filled by the app each frame.
 #[derive(Debug)]
 pub struct View<'a> {
@@ -36,8 +58,9 @@ pub struct View<'a> {
     pub cursor: Pos,
     /// Inclusive range, when a selection is live.
     pub selection: Option<(Pos, Pos)>,
-    /// First source line painted.
-    pub scroll: usize,
+    /// Pairs waiting to go out together, in bank order.
+    pub banked: &'a [Banked<'a>],
+    pub scroll: Scroll,
     /// The question being typed, when the box is open.
     pub question: Option<&'a str>,
     pub status: &'a str,
@@ -53,18 +76,22 @@ pub(crate) struct PaintedRow {
 }
 
 /// What the last frame put on screen — how the app scrolls and hit-tests the mouse.
+///
+/// A `None` row is a card: it takes height but carries no text to select.
 #[derive(Debug, Default)]
 pub struct Painted {
-    rows: Vec<PaintedRow>,
+    rows: Vec<Option<PaintedRow>>,
     /// Source lines that fit whole.
     lines: usize,
-    /// The column the rows were painted into.
+    /// The source line the frame started at — the app adopts it after a [`Scroll::Bottom`].
+    top: usize,
+    /// The text area the rows were painted into, past the gutter.
     area: Rect,
 }
 
 impl Painted {
-    pub(crate) fn new(rows: Vec<PaintedRow>, lines: usize, area: Rect) -> Self {
-        Self { rows, lines, area }
+    pub(crate) fn new(rows: Vec<Option<PaintedRow>>, lines: usize, top: usize, area: Rect) -> Self {
+        Self { rows, lines, top, area }
     }
 
     /// How many source lines a page holds — at least one, so paging always moves.
@@ -72,10 +99,15 @@ impl Painted {
         self.lines.max(1)
     }
 
+    /// First source line this frame painted.
+    pub fn top(&self) -> usize {
+        self.top
+    }
+
     /// The character under a screen cell.
     pub fn hit(&self, x: u16, y: u16) -> Option<Pos> {
         let index = usize::from(y.checked_sub(self.area.y)?);
-        let row = self.rows.get(index)?;
+        let row = self.rows.get(index)?.as_ref()?;
         let col = col_at(&row.text, x.saturating_sub(self.area.x));
         Some(Pos { line: row.line, col: row.start + col })
     }
@@ -87,6 +119,7 @@ impl Painted {
             .iter()
             .enumerate()
             .rev()
+            .filter_map(|(index, row)| Some((index, row.as_ref()?)))
             .find(|(_, row)| row.line == pos.line && row.start <= pos.col)?;
         let cells: usize =
             row.text.chars().take(pos.col - row.start).map(|ch| ch.width().unwrap_or(0)).sum();
@@ -119,8 +152,20 @@ mod tests {
 
     /// Line 7 wrapped to two rows, line 8 to one, painted at column x=3, y=5.
     fn painted() -> Painted {
-        let rows = vec![row(7, 0, "hello "), row(7, 6, "world"), row(8, 0, "日本")];
-        Painted::new(rows, 2, Rect::new(3, 5, 6, 3))
+        let rows =
+            vec![row(7, 0, "hello "), row(7, 6, "world"), row(8, 0, "日本")].into_iter().map(Some);
+        Painted::new(rows.collect(), 2, 7, Rect::new(3, 5, 6, 3))
+    }
+
+    /// The same, with a card spliced under line 7's second row.
+    fn with_card() -> Painted {
+        let rows = vec![
+            Some(row(7, 0, "hello ")),
+            Some(row(7, 6, "world")),
+            None,
+            Some(row(8, 0, "日本")),
+        ];
+        Painted::new(rows, 2, 7, Rect::new(3, 5, 6, 4))
     }
 
     #[test]
@@ -150,5 +195,13 @@ mod tests {
         assert_eq!(painted.caret(Pos { line: 7, col: 8 }), Some((5, 6)));
         assert_eq!(painted.caret(Pos { line: 8, col: 1 }), Some((5, 7)));
         assert_eq!(painted.caret(Pos { line: 9, col: 0 }), None);
+    }
+
+    #[test]
+    fn a_card_row_selects_nothing_and_still_shifts_what_is_below_it() {
+        let painted = with_card();
+        assert_eq!(painted.hit(4, 7), None); // the card row itself
+        assert_eq!(painted.hit(4, 8), Some(Pos { line: 8, col: 0 }));
+        assert_eq!(painted.caret(Pos { line: 8, col: 0 }), Some((3, 8)));
     }
 }

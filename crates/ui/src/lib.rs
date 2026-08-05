@@ -1,6 +1,7 @@
 //! Rendering. Takes plain data, never the app state, so the binary owns its own types.
 
 mod buffer;
+mod card;
 mod chrome;
 mod column;
 mod view;
@@ -8,7 +9,7 @@ mod wrap;
 
 pub use crate::{
     column::{MAX_WIDTH, content_column},
-    view::{Painted, Pos, SourceLine, Tone, View},
+    view::{Banked, Painted, Pos, Scroll, SourceLine, Tone, View},
 };
 
 use ratatui::{
@@ -23,7 +24,7 @@ pub fn render(f: &mut Frame, view: &View) -> Painted {
     let painted = buffer::render(f, body, view);
     chrome::render_footer(f, footer, view);
     if let Some(question) = view.question {
-        chrome::render_question(f, body, question);
+        chrome::render_question(f, body, view, &painted, question);
     }
     painted
 }
