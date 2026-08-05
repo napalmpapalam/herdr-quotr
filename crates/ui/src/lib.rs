@@ -8,7 +8,7 @@ mod wrap;
 
 pub use crate::{
     column::{MAX_WIDTH, content_column},
-    view::{Painted, SourceLine, Tone, View},
+    view::{Painted, Pos, SourceLine, Tone, View},
 };
 
 use ratatui::{

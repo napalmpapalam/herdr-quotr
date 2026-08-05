@@ -4,7 +4,7 @@ use std::{env, fs, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use transcript::SessionId;
+use transcript::{Pos, SessionId};
 
 /// Where herdr lets a plugin keep state between runs.
 const STATE_DIR_ENV: &str = "HERDR_PLUGIN_STATE_DIR";
@@ -15,8 +15,8 @@ const FILE: &str = "pending.json";
 pub(crate) struct Pending {
     /// Only restored into the session it was taken from.
     pub(crate) session: String,
-    pub(crate) from: usize,
-    pub(crate) to: usize,
+    pub(crate) from: Pos,
+    pub(crate) to: Pos,
     pub(crate) question: String,
 }
 

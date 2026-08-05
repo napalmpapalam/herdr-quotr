@@ -18,10 +18,10 @@ use ratatui::{
         execute,
     },
 };
-use transcript::LineKind;
+use transcript::{LineKind, Pos};
 use ui::{Painted, Tone};
 
-use crate::app::{App, Mode};
+use crate::app::{App, Grain, Mode};
 
 /// Source lines a wheel notch moves the viewport — the conventional step.
 const WHEEL: isize = 3;
@@ -60,8 +60,8 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
         .collect();
     let view = ui::View {
         lines: &lines,
-        cursor: app.cursor,
-        selection: app.selection(),
+        cursor: to_screen(app.cursor),
+        selection: app.selection().map(|(from, to)| (to_screen(from), to_screen(to))),
         scroll: app.scroll,
         question: (app.mode == Mode::Ask).then_some(app.question.as_str()),
         status: &app.status,
@@ -69,6 +69,11 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
     let mut painted = Painted::default();
     terminal.draw(|f| painted = ui::render(f, &view))?;
     Ok(painted)
+}
+
+/// The app's own position type, in the shape the paint layer takes.
+fn to_screen(pos: Pos) -> ui::Pos {
+    ui::Pos { line: pos.line, col: pos.col }
 }
 
 fn tone(kind: LineKind) -> Tone {
@@ -87,15 +92,18 @@ fn handle_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc if app.selection().is_some() => app.clear_range(),
         KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
-        KeyCode::Char('j') | KeyCode::Down => app.move_by(1),
-        KeyCode::Char('k') | KeyCode::Up => app.move_by(-1),
-        KeyCode::Char('g') | KeyCode::Home => app.move_to(0),
-        KeyCode::Char('G') | KeyCode::End => app.move_to(usize::MAX),
+        KeyCode::Char('j') | KeyCode::Down => app.move_by_line(1),
+        KeyCode::Char('k') | KeyCode::Up => app.move_by_line(-1),
+        KeyCode::Char('l') | KeyCode::Right => app.move_by_char(1),
+        KeyCode::Char('h') | KeyCode::Left => app.move_by_char(-1),
+        KeyCode::Char('g') | KeyCode::Home => app.move_to_line(0),
+        KeyCode::Char('G') | KeyCode::End => app.move_to_line(usize::MAX),
         KeyCode::PageDown => app.page_by(1),
         KeyCode::PageUp => app.page_by(-1),
         KeyCode::Char(']') => app.next_turn(),
         KeyCode::Char('[') => app.prev_turn(),
-        KeyCode::Char('V') => app.toggle_range(),
+        KeyCode::Char('v') => app.toggle_range(Grain::Char),
+        KeyCode::Char('V') => app.toggle_range(Grain::Line),
         KeyCode::Char('C' | 'c') => app.ask(),
         KeyCode::Char('S' | 's') => app.send(),
         _ => {}
@@ -118,11 +126,12 @@ fn handle_mouse(app: &mut App, mouse: MouseEvent) {
     if app.mode == Mode::Ask {
         return;
     }
+    let cell = app.painted.hit(mouse.column, mouse.row);
     match mouse.kind {
         MouseEventKind::ScrollDown => app.scroll_by(WHEEL),
         MouseEventKind::ScrollUp => app.scroll_by(-WHEEL),
-        MouseEventKind::Down(MouseButton::Left) => app.press(mouse.row),
-        MouseEventKind::Drag(MouseButton::Left) => app.drag(mouse.row),
+        MouseEventKind::Down(MouseButton::Left) => app.press(cell),
+        MouseEventKind::Drag(MouseButton::Left) => app.drag(cell),
         _ => {}
     }
 }

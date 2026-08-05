@@ -12,6 +12,10 @@ description = "Quote an agent's own response back at it, from a herdr popup."
 id = "picker"
 title = "quotr"
 placement = "popup"
+# Without these herdr picks its own popup box; the picker wants the whole terminal.
+# Percent-of-terminal or cell counts, popup placement only.
+width = "100%"
+height = "100%"
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-quotr\""]
 
 [[actions]]

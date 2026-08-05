@@ -14,17 +14,16 @@ pub fn content_column(area: Rect) -> Rect {
     Rect { x: area.x + (area.width - width) / 2, width, ..area }
 }
 
-/// Pad to the column so a highlight fills the measure rather than just the glyphs.
-pub(crate) fn pad(mut row: String, width: usize) -> String {
-    row.extend(std::iter::repeat_n(' ', width.saturating_sub(row.width())));
-    row
+/// Spaces filling the rest of the column, so a highlight covers the measure not the glyphs.
+pub(crate) fn padding(row: &str, width: usize) -> String {
+    " ".repeat(width.saturating_sub(row.width()))
 }
 
 #[cfg(test)]
 mod tests {
     use ratatui::layout::Rect;
 
-    use super::{MAX_WIDTH, content_column, pad};
+    use super::{MAX_WIDTH, content_column, padding};
 
     #[test]
     fn caps_and_centers_on_a_wide_pane() {
@@ -42,8 +41,8 @@ mod tests {
 
     #[test]
     fn pads_by_display_width_not_byte_count() {
-        assert_eq!(pad("ab".to_owned(), 5), "ab   ");
-        assert_eq!(pad("日本".to_owned(), 5), "日本 "); // two wide glyphs = four columns
-        assert_eq!(pad("toolong".to_owned(), 3), "toolong");
+        assert_eq!(padding("ab", 5), "   ");
+        assert_eq!(padding("日本", 5), " "); // two wide glyphs = four columns
+        assert_eq!(padding("toolong", 3), "");
     }
 }

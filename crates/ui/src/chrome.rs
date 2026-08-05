@@ -15,8 +15,9 @@ use crate::{column::content_column, view::View};
 const KEY_CAP: Style = Style::new().add_modifier(Modifier::REVERSED);
 
 /// Footer key caps and the hint each one carries, painted left to right.
-const BROWSE_KEYS: [(&str, &str); 5] = [
+const BROWSE_KEYS: [(&str, &str); 6] = [
     (" drag ", " select   "),
+    (" v V ", " char line   "),
     (" C ", " ask   "),
     (" S ", " send   "),
     (" [ ] ", " turn   "),

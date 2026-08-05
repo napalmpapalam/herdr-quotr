@@ -2,7 +2,6 @@
 
 use anyhow::anyhow;
 use herdr::{AGENT_PANE_ENV, Status, focus, send_text};
-use transcript::LineKind;
 
 use crate::{app::App, stash};
 
@@ -18,7 +17,8 @@ impl App {
             self.status = format!("no {AGENT_PANE_ENV} — nowhere to send");
             return;
         };
-        let quoted = self.quoted_lines();
+        let (from, to) = self.range();
+        let quoted = self.transcript.slice(from, to);
         if quoted.is_empty() {
             "nothing selected".clone_into(&mut self.status);
             return;
@@ -63,18 +63,5 @@ impl App {
             |e| format!("agent is blocked and the quote could not be parked: {e:#}"),
             |()| PARKED.to_owned(),
         );
-    }
-
-    /// Selected lines, minus the blank rows that only separate turns.
-    fn quoted_lines(&self) -> Vec<&str> {
-        let (from, to) = self.range();
-        self.transcript
-            .lines()
-            .get(from..=to)
-            .unwrap_or_default()
-            .iter()
-            .filter(|line| line.kind != LineKind::Gap)
-            .map(|line| line.text.as_str())
-            .collect()
     }
 }
