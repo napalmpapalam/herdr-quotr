@@ -2,6 +2,7 @@
 
 pub mod app;
 mod bank;
+mod config;
 mod nav;
 mod send;
 mod stash;
@@ -24,8 +25,9 @@ use ui::{Painted, Tone};
 
 use crate::app::{App, Grain};
 
-/// Source lines a wheel notch moves the viewport — the conventional step.
-const WHEEL: isize = 3;
+/// Source lines a wheel notch moves the viewport. One, not the conventional three: the
+/// picker is read at reading speed, and a three-line jump overshoots the line you came for.
+const WHEEL: isize = 1;
 
 /// Entry point: set up the terminal, run the loop, restore.
 pub fn run() -> Result<()> {
@@ -75,6 +77,9 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
         .collect();
     let view = ui::View {
         lines: &lines,
+        styles: &app.styles,
+        palette: app.theme.palette,
+        turns: app.transcript.turn_starts(),
         cursor: to_screen(app.cursor),
         selection: app.selection().map(|(from, to)| (to_screen(from), to_screen(to))),
         banked: &banked,
@@ -92,7 +97,7 @@ fn to_screen(pos: Pos) -> ui::Pos {
     ui::Pos { line: pos.line, col: pos.col }
 }
 
-fn tone(kind: LineKind) -> Tone {
+pub(crate) fn tone(kind: LineKind) -> Tone {
     match kind {
         LineKind::Agent => Tone::Agent,
         LineKind::User => Tone::User,

@@ -3,6 +3,8 @@
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
+use crate::{style::LineStyle, theme::Palette};
+
 /// Who wrote a line, as far as painting is concerned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
@@ -54,6 +56,13 @@ pub enum Scroll {
 #[derive(Debug)]
 pub struct View<'a> {
     pub lines: &'a [SourceLine<'a>],
+    /// Markdown styling for each line of `lines`, from [`crate::analyze`]. A line past the
+    /// end of this slice paints in its base style.
+    pub styles: &'a [LineStyle],
+    /// Colors this frame paints in.
+    pub palette: Palette,
+    /// First source line of each turn — where the gutter draws its turn marker.
+    pub turns: &'a [usize],
     /// Where the caret sits — painted as the terminal's own cursor.
     pub cursor: Pos,
     /// Inclusive range, when a selection is live.
@@ -73,6 +82,9 @@ pub(crate) struct PaintedRow {
     /// Character offset of the row's first character within its source line.
     pub(crate) start: usize,
     pub(crate) text: String,
+    /// A rendered table row: what was painted is padded, so a column offset into it names no
+    /// source character and the whole line is the smallest thing that can be selected.
+    pub(crate) linewise: bool,
 }
 
 /// What the last frame put on screen — how the app scrolls and hit-tests the mouse.
@@ -104,12 +116,12 @@ impl Painted {
         self.top
     }
 
-    /// The character under a screen cell.
-    pub fn hit(&self, x: u16, y: u16) -> Option<Pos> {
+    /// The character under a screen cell, and whether its line only selects whole.
+    pub fn hit(&self, x: u16, y: u16) -> Option<Hit> {
         let index = usize::from(y.checked_sub(self.area.y)?);
         let row = self.rows.get(index)?.as_ref()?;
         let col = col_at(&row.text, x.saturating_sub(self.area.x));
-        Some(Pos { line: row.line, col: row.start + col })
+        Some(Hit { pos: Pos { line: row.line, col: row.start + col }, linewise: row.linewise })
     }
 
     /// Screen cell a position sits on, for placing the terminal cursor.
@@ -121,11 +133,22 @@ impl Painted {
             .rev()
             .filter_map(|(index, row)| Some((index, row.as_ref()?)))
             .find(|(_, row)| row.line == pos.line && row.start <= pos.col)?;
-        let cells: usize =
-            row.text.chars().take(pos.col - row.start).map(|ch| ch.width().unwrap_or(0)).sum();
+        // A rendered row's columns are padding, so the caret rests at its start instead.
+        let cells: usize = if row.linewise {
+            0
+        } else {
+            row.text.chars().take(pos.col - row.start).map(|ch| ch.width().unwrap_or(0)).sum()
+        };
         let x = self.area.x.saturating_add(u16::try_from(cells).unwrap_or(u16::MAX));
         Some((x.min(self.area.right().saturating_sub(1)), self.area.y + u16::try_from(index).ok()?))
     }
+}
+
+/// Where a mouse cell landed: the character under it, and whether that line selects whole.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hit {
+    pub pos: Pos,
+    pub linewise: bool,
 }
 
 /// Character offset of the cell `dx` columns into `text`, or its end when `dx` runs past.
@@ -147,7 +170,7 @@ mod tests {
     use super::{Painted, PaintedRow, Pos};
 
     fn row(line: usize, start: usize, text: &str) -> PaintedRow {
-        PaintedRow { line, start, text: text.to_owned() }
+        PaintedRow { line, start, text: text.to_owned(), linewise: false }
     }
 
     /// Line 7 wrapped to two rows, line 8 to one, painted at column x=3, y=5.
@@ -172,21 +195,21 @@ mod tests {
     fn hit_maps_a_screen_cell_to_the_character_under_it() {
         let painted = painted();
         assert_eq!(painted.hit(3, 4), None);
-        assert_eq!(painted.hit(4, 5), Some(Pos { line: 7, col: 1 }));
-        assert_eq!(painted.hit(5, 6), Some(Pos { line: 7, col: 8 }));
+        assert_eq!(painted.hit(4, 5).map(|h| h.pos), Some(Pos { line: 7, col: 1 }));
+        assert_eq!(painted.hit(5, 6).map(|h| h.pos), Some(Pos { line: 7, col: 8 }));
         assert_eq!(painted.hit(3, 8), None);
     }
 
     #[test]
     fn hit_past_the_end_of_a_row_lands_on_its_last_boundary() {
-        assert_eq!(painted().hit(99, 6), Some(Pos { line: 7, col: 11 }));
+        assert_eq!(painted().hit(99, 6).map(|h| h.pos), Some(Pos { line: 7, col: 11 }));
     }
 
     #[test]
     fn a_wide_glyph_takes_two_cells() {
         let painted = painted();
-        assert_eq!(painted.hit(4, 7), Some(Pos { line: 8, col: 0 }));
-        assert_eq!(painted.hit(5, 7), Some(Pos { line: 8, col: 1 }));
+        assert_eq!(painted.hit(4, 7).map(|h| h.pos), Some(Pos { line: 8, col: 0 }));
+        assert_eq!(painted.hit(5, 7).map(|h| h.pos), Some(Pos { line: 8, col: 1 }));
     }
 
     #[test]
@@ -201,7 +224,7 @@ mod tests {
     fn a_card_row_selects_nothing_and_still_shifts_what_is_below_it() {
         let painted = with_card();
         assert_eq!(painted.hit(4, 7), None); // the card row itself
-        assert_eq!(painted.hit(4, 8), Some(Pos { line: 8, col: 0 }));
+        assert_eq!(painted.hit(4, 8).map(|h| h.pos), Some(Pos { line: 8, col: 0 }));
         assert_eq!(painted.caret(Pos { line: 8, col: 0 }), Some((3, 8)));
     }
 }

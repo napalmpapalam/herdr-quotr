@@ -6,9 +6,9 @@
 use anyhow::{Context, Result};
 use herdr::{AGENT_PANE_ENV, PaneId};
 use transcript::{Pos, SessionId, Transcript};
-use ui::Painted;
+use ui::{LineStyle, Painted, Theme};
 
-use crate::{bank::Bank, stash};
+use crate::{bank::Bank, config, stash, tone};
 
 /// Whether the question box is up.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +34,11 @@ pub struct App {
     /// Session the buffer came from; a stash only restores into the same one.
     pub session: Option<SessionId>,
     pub transcript: Transcript,
+    /// Colors this run paints in, from the config file.
+    pub theme: Theme,
+    /// Markdown styling for each transcript line. Built once — `syntect` is far too slow to
+    /// run per frame, and the transcript does not change under a run.
+    pub styles: Vec<LineStyle>,
     /// Character the caret sits on.
     pub cursor: Pos,
     /// First source line painted. Meaningless until [`App::settle`] runs.
@@ -55,18 +60,25 @@ pub struct App {
 
 impl App {
     pub fn new(agent_pane: Option<PaneId>) -> Self {
-        let (session, transcript, status) = match load(agent_pane.as_ref()) {
+        let (session, transcript, mut status) = match load(agent_pane.as_ref()) {
             Ok((session, t)) => {
                 let status = format!("{} lines", t.lines().len());
                 (Some(session), t, status)
             }
             Err(e) => (None, Transcript::default(), format!("{e:#}")),
         };
+        let theme = config::theme().unwrap_or_else(|e| {
+            status = format!("{e:#}");
+            ui::theme::default_theme()
+        });
+        let styles = ui::analyze(&source_lines(&transcript), &theme);
         let last = transcript.lines().len().saturating_sub(1);
         let mut app = Self {
             agent_pane,
             session,
             transcript,
+            theme,
+            styles,
             cursor: Pos::line_start(last),
             scroll: 0,
             opening: true,
@@ -95,14 +107,22 @@ impl App {
 
     /// The range that would be quoted right now, in reading order.
     ///
-    /// A linewise range covers whole lines however the caret and anchor sit inside them.
+    /// A linewise range covers whole lines however the caret and anchor sit inside them. A
+    /// range touching a rendered table is always linewise, whichever key or click made it:
+    /// the grid pads its cells, so a column there names no source character.
     pub fn range(&self) -> (Pos, Pos) {
         let anchor = self.anchor.unwrap_or(self.cursor);
         let (from, to) = (anchor.min(self.cursor), anchor.max(self.cursor));
-        match self.grain {
-            Grain::Char => (from, to),
-            Grain::Line => (Pos::line_start(from.line), self.transcript.line_end(to.line)),
+        if self.grain == Grain::Char && !self.spans_rendered(from.line, to.line) {
+            return (from, to);
         }
+        (Pos::line_start(from.line), self.transcript.line_end(to.line))
+    }
+
+    /// Whether either end of a range sits on a line the paint layer rendered rather than
+    /// styled.
+    fn spans_rendered(&self, from: usize, to: usize) -> bool {
+        [from, to].iter().any(|line| self.styles.get(*line).is_some_and(LineStyle::is_linewise))
     }
 
     pub fn selection(&self) -> Option<(Pos, Pos)> {
@@ -178,4 +198,13 @@ fn load(pane: Option<&PaneId>) -> Result<(SessionId, Transcript)> {
     let session = herdr::agent_session(pane)?;
     let transcript = Transcript::load(&transcript::find(&session)?)?;
     Ok((session, transcript))
+}
+
+/// The transcript in the shape the paint layer styles, borrowed just long enough to analyze.
+fn source_lines(transcript: &Transcript) -> Vec<ui::SourceLine<'_>> {
+    transcript
+        .lines()
+        .iter()
+        .map(|line| ui::SourceLine { text: &line.text, tone: tone(line.kind) })
+        .collect()
 }

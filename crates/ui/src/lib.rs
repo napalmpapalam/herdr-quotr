@@ -4,12 +4,20 @@ mod buffer;
 mod card;
 mod chrome;
 mod column;
+mod highlight;
+mod markdown;
+mod style;
+mod table;
+pub mod theme;
 mod view;
 mod wrap;
 
 pub use crate::{
     column::{MAX_WIDTH, content_column},
-    view::{Banked, Painted, Pos, Scroll, SourceLine, Tone, View},
+    markdown::analyze,
+    style::LineStyle,
+    theme::{NAMES as THEMES, Palette, Theme},
+    view::{Banked, Hit, Painted, Pos, Scroll, SourceLine, Tone, View},
 };
 
 use ratatui::{

@@ -17,6 +17,11 @@ anyhow = { version = "1", default-features = false, features = ["std"] }
 ratatui = { version = "0.30", default-features = false, features = ["crossterm", "layout-cache"] }
 serde = { version = "1", default-features = false, features = ["std", "derive"] }
 serde_json = { version = "1", default-features = false, features = ["std"] }
+# Dumps + fancy-regex only: no yaml-load (the syntax set is a prebuilt binary dump, so the
+# unmaintained yaml-rust never enters the tree), no onig (pure-Rust regex engine).
+syntect = { version = "5.3", default-features = false, features = ["parsing", "regex-fancy", "dump-load", "plist-load"] }
+toml = { version = "1.1", default-features = false, features = ["parse", "serde"] }
+two-face = { version = "0.5.1", default-features = false, features = ["syntect-fancy"] }
 # `cjk` is a default, kept deliberately: transcripts carry wide glyphs and the wrap is
 # width-aware.
 unicode-width = { version = "0.2", default-features = false, features = ["cjk"] }
@@ -69,6 +74,7 @@ export.workspace = true
 herdr.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 transcript.workspace = true
 ui.workspace = true
 

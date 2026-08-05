@@ -68,6 +68,12 @@ impl Transcript {
         Pos { line, col: self.lines.get(line).map_or(0, SourceLine::len) }
     }
 
+    /// First line of each turn, in order — what `[` and `]` jump between, and where the
+    /// gutter draws its turn marker.
+    pub fn turn_starts(&self) -> &[usize] {
+        &self.starts
+    }
+
     pub fn next_turn(&self, from: usize) -> Option<usize> {
         self.starts.iter().copied().find(|&start| start > from)
     }

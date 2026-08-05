@@ -3,7 +3,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style, Stylize},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
 };
@@ -14,20 +14,18 @@ use crate::{
     view::{Painted, View},
 };
 
-/// Reverse video, so a key cap reads as a physical key.
-const KEY_CAP: Style = Style::new().add_modifier(Modifier::REVERSED);
-
 /// Footer key caps and the hint each one carries, painted left to right.
-const BROWSE_KEYS: [(&str, &str); 7] = [
-    (" drag ", " select   "),
-    (" v V ", " char line   "),
-    (" C ", " ask   "),
-    (" e d ", " edit del   "),
-    (" S ", " send   "),
-    (" [ ] ", " turn   "),
-    (" q ", " quit   "),
+const BROWSE_KEYS: [(&str, &str); 8] = [
+    ("drag", "select"),
+    ("v V", "char line"),
+    ("C", "ask"),
+    ("e", "edit"),
+    ("d", "del"),
+    ("S", "send"),
+    ("[ ]", "turn"),
+    ("q", "quit"),
 ];
-const ASK_KEYS: [(&str, &str); 2] = [(" enter ", " bank   "), (" esc ", " back   ")];
+const ASK_KEYS: [(&str, &str); 2] = [("enter", "bank"), ("esc", "back")];
 
 const BOX_HEIGHT: u16 = 3;
 
@@ -38,10 +36,24 @@ pub(crate) fn render_footer(f: &mut Frame, area: Rect, view: &View) {
         0 => String::new(),
         n => format!("{n} banked   "),
     };
+    let p = &view.palette;
+    let bracket = Style::new().fg(p.overlay0);
     let spans = keys
         .iter()
-        .flat_map(|&(cap, hint)| [Span::styled(cap, KEY_CAP), Span::raw(hint)])
-        .chain([Span::raw(banked).bold(), Span::raw(view.status).dim()]);
+        .flat_map(|&(cap, hint)| {
+            // The turn keys *are* brackets; wrapping them again reads as `[[ ]]`.
+            let bare = cap.contains(['[', ']']);
+            [
+                Span::styled(if bare { "" } else { "[" }, bracket),
+                Span::styled(cap, Style::new().fg(p.code)),
+                Span::styled(if bare { " " } else { "] " }, bracket),
+                Span::styled(format!("{hint}   "), Style::new().fg(p.subtext0)),
+            ]
+        })
+        .chain([
+            Span::styled(banked, Style::new().fg(p.text).add_modifier(Modifier::BOLD)),
+            Span::styled(view.status, Style::new().fg(p.overlay0)),
+        ]);
     f.render_widget(Paragraph::new(spans.collect::<Line>()), area);
 }
 
@@ -55,11 +67,14 @@ pub(crate) fn render_question(
 ) {
     let height = BOX_HEIGHT.min(area.height);
     let box_area = Rect { y: box_y(area, view, painted, height), height, ..content_column(area) };
-    let block = Block::default().borders(Borders::ALL).title(" question ");
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::new().fg(view.palette.overlay0))
+        .title(Span::styled(" question ", Style::new().fg(view.palette.text)));
     let inner = block.inner(box_area);
     f.render_widget(Clear, box_area);
     f.render_widget(block, box_area);
-    f.render_widget(Paragraph::new(question), inner);
+    f.render_widget(Paragraph::new(question).style(Style::new().fg(view.palette.text)), inner);
 
     let typed = u16::try_from(question.width()).unwrap_or(u16::MAX);
     f.set_cursor_position((inner.x + typed.min(inner.width.saturating_sub(1)), inner.y));

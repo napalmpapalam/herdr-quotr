@@ -10,6 +10,8 @@ repository.workspace = true
 
 [dependencies]
 ratatui.workspace = true
+syntect.workspace = true
+two-face.workspace = true
 unicode-width.workspace = true
 
 [lints]

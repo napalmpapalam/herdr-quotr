@@ -1,7 +1,7 @@
 //! Moving the caret, the viewport, and the selection.
 
 use transcript::Pos;
-use ui::Pos as Screen;
+use ui::Hit;
 
 use crate::app::{App, Grain};
 
@@ -51,16 +51,21 @@ impl App {
 
     /// A press starts a selection at the character under the pointer; releasing without a
     /// drag leaves it empty, so a bare click just places the caret.
-    pub fn press(&mut self, cell: Option<Screen>) {
-        let Some(pos) = cell.map(from_screen) else { return };
-        self.anchor = Some(self.transcript.clamp(pos));
-        self.grain = Grain::Char; // the pointer always means exactly what it crossed
-        self.move_to(pos);
+    pub fn press(&mut self, cell: Option<Hit>) {
+        let Some(hit) = cell else { return };
+        self.anchor = Some(self.transcript.clamp(from_screen(hit.pos)));
+        // The pointer means exactly what it crossed — unless it crossed a rendered table,
+        // whose painted columns name no source character.
+        self.grain = if hit.linewise { Grain::Line } else { Grain::Char };
+        self.move_to(from_screen(hit.pos));
     }
 
-    pub fn drag(&mut self, cell: Option<Screen>) {
-        let Some(pos) = cell.map(from_screen) else { return };
-        self.move_to(pos);
+    pub fn drag(&mut self, cell: Option<Hit>) {
+        let Some(hit) = cell else { return };
+        if hit.linewise {
+            self.grain = Grain::Line;
+        }
+        self.move_to(from_screen(hit.pos));
     }
 
     /// Keep the caret on screen, using what the last frame managed to fit.
@@ -76,6 +81,6 @@ impl App {
     }
 }
 
-fn from_screen(pos: Screen) -> Pos {
+fn from_screen(pos: ui::Pos) -> Pos {
     Pos::new(pos.line, pos.col)
 }

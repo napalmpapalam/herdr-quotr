@@ -3,7 +3,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::LineKind;
+use crate::{LineKind, command};
 
 /// One transcript line; `Other` swallows the kinds quotr ignores.
 #[derive(Debug, Deserialize)]
@@ -55,6 +55,7 @@ impl Turn {
             return None;
         }
         let text = self.message.content.into_text();
+        let text = command::unwrap(&text).unwrap_or(text);
         (!text.trim().is_empty()).then(|| (kind, text.trim_end().to_owned()))
     }
 

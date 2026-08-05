@@ -1,5 +1,6 @@
 //! A Claude Code session transcript, flattened into the lines the picker scrolls.
 
+mod command;
 mod entry;
 mod line;
 mod path;
