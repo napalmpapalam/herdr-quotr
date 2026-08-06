@@ -20,7 +20,7 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # The release body is the tag's CHANGELOG.md section; a missing section fails the release
       # rather than shipping a bare compare link.
       - uses: taiki-e/create-gh-release-action@v1
@@ -43,7 +43,7 @@ jobs:
           - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
           - { target: aarch64-unknown-linux-musl, os: ubuntu-latest }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Builds herdr-quotr for the target (cross-compiling aarch64 Linux via `cross` as needed),
       # archives it as herdr-quotr-<target>.tar.gz with a .sha256 sidecar, and uploads both.
@@ -55,7 +55,7 @@ jobs:
           checksum: sha256
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: herdr-quotr-${{ matrix.target }}.tar.gz
 
