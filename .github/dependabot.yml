@@ -14,3 +14,7 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # `dtolnay/rust-toolchain@<version>` names the toolchain, not the action's release, so
+      # the msrv job's ref is the `rust-version` in Cargo.toml. Bumping it defeats the check.
+      - dependency-name: dtolnay/rust-toolchain
