@@ -6,6 +6,9 @@ use ratatui::style::Color;
 /// happen to be — quotr keeps four accents, each with exactly one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
+    /// The pane's own fill. The popup is full-screen, so a light theme on a dark terminal has
+    /// to bring its own ground or it is unreadable.
+    pub base: Color,
     /// Fill behind the live selection.
     pub select_bg: Color,
     /// Fill behind the footer, so the chrome reads as a surface of its own.
@@ -101,6 +104,7 @@ pub(super) fn derive(a: Anchors, appearance: Appearance) -> Palette {
     let subtext0 = blend(a.text, a.base, 0.18);
 
     Palette {
+        base: a.base,
         select_bg: blend(a.base, pole, fill),
         bar: blend(a.base, pole, bar),
         overlay0: blend(a.base, pole, 0.26),

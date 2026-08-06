@@ -58,6 +58,8 @@ pub struct View<'a> {
     pub styles: &'a [LineStyle],
     /// Colors this frame paints in.
     pub palette: Palette,
+    /// Reading measure in columns — the cap the text column centers within.
+    pub measure: u16,
     /// First source line of each turn — where the gutter draws its turn marker.
     pub turns: &'a [usize],
     /// Where the caret sits — painted as the terminal's own cursor.

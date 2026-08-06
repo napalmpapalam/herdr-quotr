@@ -71,7 +71,11 @@ pub(crate) fn render_question(
 ) {
     let p = &view.palette;
     let height = BOX_HEIGHT.min(area.height);
-    let box_area = Rect { y: box_y(area, view, painted, height), height, ..content_column(area) };
+    let box_area = Rect {
+        y: box_y(area, view, painted, height),
+        height,
+        ..content_column(area, view.measure)
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)

@@ -81,6 +81,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
         lines: &lines,
         styles: &app.styles,
         palette: app.theme.palette,
+        measure: app.measure,
         turns: app.transcript.turn_starts(),
         cursor: app.cursor,
         selection: app.selection(),

@@ -1,7 +1,8 @@
 //! The color model: named themes, each a [`Palette`] plus the syntax theme it pairs with.
 //!
-//! One selection sets both, so chrome and code never desync. The pane background stays the
-//! terminal's — only these fills and foregrounds are painted.
+//! One selection sets both, so chrome and code never desync. The picker paints its own ground
+//! (`Palette::base`): the popup is full-screen, so borrowing the terminal's would leave a light
+//! theme unreadable on a dark terminal.
 
 mod catalog;
 mod palette;

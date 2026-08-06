@@ -82,6 +82,7 @@ mod tests {
             lines: &LINES,
             styles: &[],
             palette: theme::default_theme().palette,
+            measure: crate::DEFAULT_MEASURE,
             turns,
             cursor: Pos::default(),
             selection: None,

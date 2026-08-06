@@ -19,7 +19,7 @@ const TAIL: usize = 2;
 
 /// The reading area. No border of its own — herdr's popup already frames the pane.
 pub(crate) fn render(f: &mut TerminalFrame, area: Rect, view: &View) -> Painted {
-    let column = content_column(area);
+    let column = content_column(area, view.measure);
     let text = text_area(column);
     let height = usize::from(column.height);
     let width = usize::from(text.width);

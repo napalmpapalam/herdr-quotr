@@ -18,20 +18,51 @@ const CONFIG_DIR_ENV: &str = "HERDR_PLUGIN_CONFIG_DIR";
 #[derive(Debug, Default, serde::Deserialize)]
 struct ConfigFile {
     theme: Option<String>,
+    measure: Option<u16>,
 }
 
-/// The theme named in the config file, or the default.
+/// What the config file settles for a run.
+#[derive(Debug)]
+pub(crate) struct Config {
+    pub(crate) theme: Theme,
+    /// Reading measure, in columns.
+    pub(crate) measure: u16,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self { theme: ui::theme::default_theme(), measure: ui::DEFAULT_MEASURE }
+    }
+}
+
+/// The config file's settings, or the defaults.
 ///
 /// A missing directory, a missing file, and an omitted key all mean "use the default". A file
-/// that fails to read or parse, or that names a theme that does not exist, is an error —
-/// silently painting the wrong colors would be worse.
-pub(crate) fn theme() -> Result<Theme> {
-    let Some(name) = read()?.theme else {
+/// that fails to read or parse, or that carries a value quotr cannot honor, is an error —
+/// silently painting the wrong thing would be worse.
+pub(crate) fn load() -> Result<Config> {
+    let file = read()?;
+    Ok(Config { theme: theme(file.theme.as_deref())?, measure: measure(file.measure)? })
+}
+
+fn theme(name: Option<&str>) -> Result<Theme> {
+    let Some(name) = name else {
         return Ok(ui::theme::default_theme());
     };
 
-    ui::theme::resolve(&name)
+    ui::theme::resolve(name)
         .ok_or_else(|| anyhow!("unknown theme {name:?}. known: {}", ui::THEMES.join(", ")))
+}
+
+fn measure(columns: Option<u16>) -> Result<u16> {
+    let Some(columns) = columns else {
+        return Ok(ui::DEFAULT_MEASURE);
+    };
+
+    if (ui::MIN_MEASURE..=ui::MAX_MEASURE).contains(&columns) {
+        return Ok(columns);
+    }
+    Err(anyhow!("measure {columns} is out of range ({}-{})", ui::MIN_MEASURE, ui::MAX_MEASURE))
 }
 
 /// The parsed config file, or its defaults when there is nothing to read.
@@ -55,7 +86,7 @@ fn path() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::ConfigFile;
+    use super::{ConfigFile, measure};
 
     fn parse(text: &str) -> ConfigFile {
         toml::from_str(text).unwrap_or_default()
@@ -63,11 +94,26 @@ mod tests {
 
     #[test]
     fn an_empty_file_leaves_every_key_unset() {
-        assert!(parse("").theme.is_none());
+        let file = parse("");
+        assert!(file.theme.is_none());
+        assert!(file.measure.is_none());
     }
 
     #[test]
     fn an_unknown_key_is_ignored() {
         assert_eq!(parse("theme = \"nord\"\nfuture_key = 3").theme.as_deref(), Some("nord"));
+    }
+
+    #[test]
+    fn an_omitted_measure_is_the_default() {
+        assert_eq!(measure(None).ok(), Some(ui::DEFAULT_MEASURE));
+    }
+
+    #[test]
+    fn a_measure_outside_the_range_is_an_error() {
+        assert_eq!(measure(Some(ui::MIN_MEASURE)).ok(), Some(ui::MIN_MEASURE));
+        assert_eq!(measure(Some(ui::MAX_MEASURE)).ok(), Some(ui::MAX_MEASURE));
+        assert!(measure(Some(ui::MIN_MEASURE - 1)).is_err());
+        assert!(measure(Some(ui::MAX_MEASURE + 1)).is_err());
     }
 }

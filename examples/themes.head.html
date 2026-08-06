@@ -1,0 +1,74 @@
+<title>quotr themes</title>
+<style>
+  :root {
+    --ink: #16161c;
+    --ink-quiet: #5c5c68;
+    --ground: #f6f6f4;
+    --card: #ffffff;
+    --rule: #dededa;
+    --accent: #4c4a8f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8e8ea;
+      --ink-quiet: #9a9aa4;
+      --ground: #131316;
+      --card: #1b1b1f;
+      --rule: #2e2e34;
+      --accent: #a8a5f0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e8e8ea;
+    --ink-quiet: #9a9aa4;
+    --ground: #131316;
+    --card: #1b1b1f;
+    --rule: #2e2e34;
+    --accent: #a8a5f0;
+  }
+  :root[data-theme="light"] {
+    --ink: #16161c;
+    --ink-quiet: #5c5c68;
+    --ground: #f6f6f4;
+    --card: #ffffff;
+    --rule: #dededa;
+    --accent: #4c4a8f;
+  }
+
+  body {
+    margin: 0;
+    padding: 2.5rem 1.5rem 6rem;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+  }
+  main { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 2rem; }
+  header { max-width: 1180px; margin: 0 auto 2rem; }
+  h1 {
+    font: 600 1.5rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: -0.01em;
+    margin: 0 0 .4rem;
+  }
+  header p { margin: 0; color: var(--ink-quiet); max-width: 62ch; }
+
+  pre {
+    font: 12px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    padding: 14px 16px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    overflow-x: auto;
+    margin: 0;
+  }
+</style>
+
+<header>
+  <h1>quotr themes</h1>
+  <p>
+    All 19 themes, each a real frame from the picker's paint stack — the same fixture, with a
+    selection live and one pair banked. The picker paints its own ground, so what you see here
+    is exactly what the popup fills the screen with, whatever your terminal's background is.
+  </p>
+</header>
+
+<main>

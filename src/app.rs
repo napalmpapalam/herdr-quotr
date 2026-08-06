@@ -1,7 +1,6 @@
-//! Picker state — terminal-free, so it stays testable. Actions live in [`nav`] and [`send`].
-//!
-//! [`nav`]: crate::nav
-//! [`send`]: crate::send
+//! Picker state — terminal-free, so it stays testable. Actions live in `nav` and `send`.
+
+use std::{env, path::Path};
 
 use anyhow::{Context, Result};
 use herdr::{AGENT_PANE_ENV, PaneId};
@@ -10,6 +9,14 @@ use transcript::{SessionId, Transcript};
 use ui::{LineStyle, Painted, Theme};
 
 use crate::{bank::Bank, config, stash};
+
+/// Read a transcript straight from a file instead of resolving one through herdr — how the
+/// picker is driven outside a pane, for the demo recording and for working on the UI.
+const TRANSCRIPT_ENV: &str = "QUOTR_TRANSCRIPT";
+
+/// The session a [`TRANSCRIPT_ENV`] run reports. A stash is session-scoped, so a demo run
+/// can never restore into a real session's picker.
+const DEMO_SESSION: &str = "00000000-0000-0000-0000-000000000000";
 
 /// Whether the question box is up.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +44,8 @@ pub struct App {
     pub transcript: Transcript,
     /// Colors this run paints in, from the config file.
     pub theme: Theme,
+    /// Reading measure in columns, from the config file.
+    pub measure: u16,
     /// Markdown styling for each transcript line. Built once — `syntect` is far too slow to
     /// run per frame, and the transcript does not change under a run.
     pub styles: Vec<LineStyle>,
@@ -68,17 +77,18 @@ impl App {
             }
             Err(e) => (None, Transcript::default(), format!("{e:#}")),
         };
-        let theme = config::theme().unwrap_or_else(|e| {
+        let config = config::load().unwrap_or_else(|e| {
             status = format!("{e:#}");
-            ui::theme::default_theme()
+            config::Config::default()
         });
-        let styles = analyze(&transcript, &theme);
+        let styles = analyze(&transcript, &config.theme, config.measure);
         let last = transcript.lines().len().saturating_sub(1);
         let mut app = Self {
             agent_pane,
             session,
             transcript,
-            theme,
+            theme: config.theme,
+            measure: config.measure,
             styles,
             cursor: Pos::line_start(last),
             scroll: 0,
@@ -195,6 +205,10 @@ impl App {
 }
 
 fn load(pane: Option<&PaneId>) -> Result<(SessionId, Transcript)> {
+    if let Some(path) = env::var_os(TRANSCRIPT_ENV) {
+        let session = DEMO_SESSION.parse().context("the demo session id")?;
+        return Ok((session, Transcript::load(Path::new(&path))?));
+    }
     let pane = pane.with_context(|| format!("{AGENT_PANE_ENV} not set"))?;
     let session = herdr::agent_session(pane)?;
     let transcript = Transcript::load(&transcript::find(&session)?)?;
@@ -202,7 +216,7 @@ fn load(pane: Option<&PaneId>) -> Result<(SessionId, Transcript)> {
 }
 
 /// Color the whole transcript once, in the shape the paint layer takes.
-fn analyze(transcript: &Transcript, theme: &Theme) -> Vec<LineStyle> {
+fn analyze(transcript: &Transcript, theme: &Theme, measure: u16) -> Vec<LineStyle> {
     let markup: Vec<ui::Markup<'_>> = transcript
         .lines()
         .iter()
@@ -214,5 +228,5 @@ fn analyze(transcript: &Transcript, theme: &Theme) -> Vec<LineStyle> {
         })
         .collect();
 
-    ui::analyze(&markup, theme)
+    ui::analyze(&markup, theme, measure)
 }

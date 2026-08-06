@@ -10,7 +10,7 @@ use ratatui::style::Style;
 use markup::{Block, Tone};
 
 use crate::{
-    column::{GUTTER, MAX_WIDTH},
+    column::GUTTER,
     highlight::Highlighter,
     style::{LineStyle, Run},
     table::Table,
@@ -23,13 +23,13 @@ pub(crate) use crate::markdown::line::runs_of;
 /// Color every line. Run once per transcript — `syntect` is far too slow per frame.
 ///
 /// User turns are left unstyled: they read dim as a whole, which is the separator's job.
-pub fn analyze(lines: &[Markup<'_>], theme: &Theme) -> Vec<LineStyle> {
+pub fn analyze(lines: &[Markup<'_>], theme: &Theme, measure: u16) -> Vec<LineStyle> {
     Styler {
         highlighter: Highlighter::new(theme.syntax),
         palette: &theme.palette,
         // Tables are laid out for the full measure; a narrower pane drops back to raw markdown
         // at paint time, the only place the real width is known.
-        width: usize::from(MAX_WIDTH - GUTTER),
+        width: usize::from(measure.saturating_sub(GUTTER)),
         out: vec![LineStyle::default(); lines.len()],
     }
     .run(lines)
@@ -144,14 +144,14 @@ mod tests {
     use markup::{Block, Emphasis, Span, Tone};
 
     use super::analyze;
-    use crate::{style::LineStyle, theme, view::Markup};
+    use crate::{column::DEFAULT_MEASURE, style::LineStyle, theme, view::Markup};
 
     fn agent(text: &str) -> Markup<'_> {
         Markup { text, tone: Tone::Agent, block: Block::Prose, spans: &[] }
     }
 
     fn styled(lines: &[Markup<'_>]) -> Vec<LineStyle> {
-        analyze(lines, &theme::default_theme())
+        analyze(lines, &theme::default_theme(), DEFAULT_MEASURE)
     }
 
     /// The color in force at `col` of line `index`.
