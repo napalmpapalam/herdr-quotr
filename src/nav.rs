@@ -1,6 +1,6 @@
 //! Moving the caret, the viewport, and the selection.
 
-use transcript::Pos;
+use markup::Pos;
 use ui::Hit;
 
 use crate::app::{App, Grain};
@@ -53,11 +53,11 @@ impl App {
     /// drag leaves it empty, so a bare click just places the caret.
     pub fn press(&mut self, cell: Option<Hit>) {
         let Some(hit) = cell else { return };
-        self.anchor = Some(self.transcript.clamp(from_screen(hit.pos)));
+        self.anchor = Some(self.transcript.clamp(hit.pos));
         // The pointer means exactly what it crossed — unless it crossed a rendered table,
         // whose painted columns name no source character.
         self.grain = if hit.linewise { Grain::Line } else { Grain::Char };
-        self.move_to(from_screen(hit.pos));
+        self.move_to(hit.pos);
     }
 
     pub fn drag(&mut self, cell: Option<Hit>) {
@@ -65,7 +65,7 @@ impl App {
         if hit.linewise {
             self.grain = Grain::Line;
         }
-        self.move_to(from_screen(hit.pos));
+        self.move_to(hit.pos);
     }
 
     /// Keep the caret on screen, using what the last frame managed to fit.
@@ -79,8 +79,4 @@ impl App {
             self.scroll += self.cursor.line - bottom;
         }
     }
-}
-
-fn from_screen(pos: ui::Pos) -> Pos {
-    Pos::new(pos.line, pos.col)
 }

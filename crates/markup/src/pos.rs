@@ -1,9 +1,8 @@
 //! Where a selection starts and ends.
 
-use serde::{Deserialize, Serialize};
-
 /// A source line and a character offset into it. Ordering is reading order.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pos {
     pub line: usize,
     pub col: usize,

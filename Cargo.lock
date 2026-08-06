@@ -341,6 +341,7 @@ dependencies = [
  "anyhow",
  "export",
  "herdr",
+ "markup",
  "ratatui",
  "serde",
  "serde_json",
@@ -468,6 +469,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d2f2f9b4ba7e6b24d95e7e899329d35be83bcded72c8540cdd5368932d1d90a"
 dependencies = [
  "hashbrown 0.17.1",
+]
+
+[[package]]
+name = "markup"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1042,6 +1050,7 @@ name = "transcript"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "markup",
  "serde",
  "serde_json",
 ]
@@ -1061,6 +1070,7 @@ dependencies = [
 name = "ui"
 version = "0.1.0"
 dependencies = [
+ "markup",
  "ratatui",
  "syntect",
  "two-face",

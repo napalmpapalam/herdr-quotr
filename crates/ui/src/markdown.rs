@@ -1,31 +1,29 @@
-//! Markdown styling of the raw source: dim the markers, color what they mark.
+//! Color for lines whose markers the transcript already removed: emphasis, code, tables.
 //!
-//! No rendering — a display character always is a source character, which is what lets a
-//! selection map back to bytes the transcript holds. Tables are the one exception
-//! ([`crate::table`]).
+//! Nothing here rewrites text. What the picker shows is what a quote sends, with two
+//! exceptions that carry their own reason: a blockquote's rule and a rendered table.
 
-mod block;
-mod fence;
-mod inline;
+mod line;
 
 use ratatui::style::Style;
+
+use markup::{Block, Tone};
 
 use crate::{
     column::{GUTTER, MAX_WIDTH},
     highlight::Highlighter,
-    markdown::fence::Fence,
     style::{LineStyle, Run},
     table::Table,
     theme::{Palette, Theme},
-    view::{SourceLine, Tone},
+    view::Markup,
 };
 
-pub(crate) use crate::markdown::inline::runs as inline_runs;
+pub(crate) use crate::markdown::line::runs_of;
 
-/// Style every source line. Run once per transcript — `syntect` is far too slow per frame.
+/// Color every line. Run once per transcript — `syntect` is far too slow per frame.
 ///
 /// User turns are left unstyled: they read dim as a whole, which is the separator's job.
-pub fn analyze(lines: &[SourceLine<'_>], theme: &Theme) -> Vec<LineStyle> {
+pub fn analyze(lines: &[Markup<'_>], theme: &Theme) -> Vec<LineStyle> {
     Styler {
         highlighter: Highlighter::new(theme.syntax),
         palette: &theme.palette,
@@ -37,7 +35,7 @@ pub fn analyze(lines: &[SourceLine<'_>], theme: &Theme) -> Vec<LineStyle> {
     .run(lines)
 }
 
-/// Walks the transcript once, holding the state a line's styling depends on.
+/// Walks the transcript once, holding what a multi-line construct needs.
 struct Styler<'a> {
     highlighter: Highlighter,
     palette: &'a Palette,
@@ -46,95 +44,81 @@ struct Styler<'a> {
 }
 
 impl Styler<'_> {
-    fn run(mut self, lines: &[SourceLine<'_>]) -> Vec<LineStyle> {
-        let mut open: Option<Fence> = None;
-        // Lines a rendered table already claimed.
-        let mut skip_to = 0;
-
-        for (index, line) in lines.iter().enumerate() {
-            if index < skip_to {
-                continue;
-            }
-            // A fence never spans a turn boundary, so an unclosed one ends with its turn.
-            if line.tone != Tone::Agent {
-                self.close(open.take());
-                continue;
-            }
-            match open.take() {
-                Some(fence) => open = self.in_fence(fence, index, line.text),
-                None => skip_to = self.opening(lines, index, &mut open),
-            }
+    fn run(mut self, lines: &[Markup<'_>]) -> Vec<LineStyle> {
+        let mut index = 0;
+        while let Some(line) = lines.get(index) {
+            index += self.one(lines, index, line);
         }
 
-        self.close(open);
         self.out
     }
 
-    /// A line inside a fence: the closing rail, or one more body line.
-    fn in_fence(&mut self, mut fence: Fence, index: usize, text: &str) -> Option<Fence> {
-        if !fence.closed_by(text) {
-            fence.push(text);
-            return Some(fence);
+    /// Style what starts at `index`, returning the lines it claimed — a fenced block and a
+    /// rendered table each take several.
+    fn one(&mut self, lines: &[Markup<'_>], index: usize, line: &Markup<'_>) -> usize {
+        if line.tone != Tone::Agent {
+            return 1;
         }
-
-        self.set(index, self.marker_line());
-        self.close(Some(fence));
-        None
-    }
-
-    /// A line outside a fence: it opens one, opens a table, or is prose. Returns the line to
-    /// resume at, which a table moves past its own rows.
-    fn opening(
-        &mut self,
-        lines: &[SourceLine<'_>],
-        index: usize,
-        open: &mut Option<Fence>,
-    ) -> usize {
-        let Some(text) = lines.get(index).map(|line| line.text) else { return 0 };
-
-        if let Some(fence) = Fence::opened_by(text, index + 1) {
-            self.set(index, self.marker_line());
-            *open = Some(fence);
-            return 0;
-        }
-
-        if let Some(table) = self.table_at(lines, index) {
-            let end = index + table.len();
-            for (offset, style) in table.styles(self.palette).into_iter().enumerate() {
-                self.set(index + offset, style);
+        match line.block {
+            Block::Rail => {
+                self.set(index, LineStyle::new(vec![Run::new(0, self.dim())]));
+                1
             }
-            return end;
+            Block::Code => self.fence(lines, index),
+            Block::TableRow => match self.table(lines, index) {
+                Some(claimed) => claimed,
+                None => self.prose(index, line),
+            },
+            _ => self.prose(index, line),
         }
-
-        self.set(index, inline::line(text, self.palette));
-        0
     }
 
-    /// The table opening at `index`. Only agent lines take part, so a table never runs across
-    /// a turn boundary.
-    fn table_at(&self, lines: &[SourceLine<'_>], index: usize) -> Option<Table> {
-        let rows: Vec<&str> = lines
+    fn prose(&mut self, index: usize, line: &Markup<'_>) -> usize {
+        let style = line::style(line, self.palette);
+        self.set(index, style);
+        1
+    }
+
+    /// A fenced block's body, highlighted in one pass — `syntect` wants the whole thing, and
+    /// the language comes off the rail above it. An unclosed fence ends with its turn, so the
+    /// newest one in a live transcript still highlights what it has.
+    fn fence(&mut self, lines: &[Markup<'_>], index: usize) -> usize {
+        let body: Vec<&str> = lines
             .iter()
             .skip(index)
-            .take_while(|line| line.tone == Tone::Agent)
+            .take_while(|line| line.block == Block::Code && line.tone == Tone::Agent)
             .map(|line| line.text)
             .collect();
+        let language = index
+            .checked_sub(1)
+            .and_then(|at| lines.get(at))
+            .filter(|rail| rail.block == Block::Rail)
+            .map_or("", |rail| language(rail.text));
 
-        Table::parse(&rows, self.width)
-    }
-
-    /// Highlight a finished fence's body into the lines it covered.
-    fn close(&mut self, fence: Option<Fence>) {
-        let Some(fence) = fence else { return };
-
-        for (index, style) in fence.highlight(&self.highlighter) {
-            self.set(index, style);
+        let mut source = body.join("\n");
+        source.push('\n');
+        for (offset, runs) in self.highlighter.runs(&source, language).into_iter().enumerate() {
+            self.set(index + offset, LineStyle::new(runs));
         }
+
+        body.len().max(1)
     }
 
-    /// A line that is all marker — a fence rail.
-    fn marker_line(&self) -> LineStyle {
-        LineStyle::new(vec![Run::new(0, Style::new().fg(self.palette.overlay0))])
+    /// The table opening at `index`, if it is one and its grid fits. Only agent lines take
+    /// part, so a table never runs across a turn boundary.
+    fn table(&mut self, lines: &[Markup<'_>], index: usize) -> Option<usize> {
+        let rows = lines.iter().skip(index).take_while(|line| line.tone == Tone::Agent).count();
+        let table = Table::parse(lines.get(index..index + rows)?, self.width)?;
+
+        for (offset, style) in table.styles(self.palette).into_iter().enumerate() {
+            self.set(index + offset, style);
+        }
+
+        Some(table.len())
+    }
+
+    fn dim(&self) -> Style {
+        Style::new().fg(self.palette.overlay0)
     }
 
     fn set(&mut self, index: usize, style: LineStyle) {
@@ -144,71 +128,127 @@ impl Styler<'_> {
     }
 }
 
+/// A fence rail's info string, matched as a language by the highlighter.
+fn language(rail: &str) -> &str {
+    rail.trim_start_matches(' ')
+        .trim_start_matches(['`', '~'])
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
-    use ratatui::style::Style;
+    use ratatui::style::{Modifier, Style};
+
+    use markup::{Block, Emphasis, Span, Tone};
 
     use super::analyze;
-    use crate::{
-        style::LineStyle,
-        theme,
-        view::{SourceLine, Tone},
-    };
+    use crate::{style::LineStyle, theme, view::Markup};
 
-    fn agent(text: &str) -> SourceLine<'_> {
-        SourceLine { text, tone: Tone::Agent }
+    fn agent(text: &str) -> Markup<'_> {
+        Markup { text, tone: Tone::Agent, block: Block::Prose, spans: &[] }
     }
 
-    fn styled(lines: &[SourceLine<'_>]) -> Vec<LineStyle> {
+    fn styled(lines: &[Markup<'_>]) -> Vec<LineStyle> {
         analyze(lines, &theme::default_theme())
+    }
+
+    /// The color in force at `col` of line `index`.
+    fn fg(styled: &[LineStyle], index: usize, col: usize) -> Option<ratatui::style::Color> {
+        styled.get(index).and_then(|line| line.at(col).fg)
     }
 
     #[test]
     fn a_fenced_block_is_syntax_highlighted_between_dim_rails() {
         let p = theme::default_theme().palette;
-        let styled = styled(&[agent("```rust"), agent("let x = 1;"), agent("```"), agent("after")]);
-        assert_eq!(styled.first().map(|s| s.at(0).fg), Some(Some(p.overlay0)));
-        assert_eq!(styled.get(2).map(|s| s.at(0).fg), Some(Some(p.overlay0)));
+        let rail = |text| Markup { block: Block::Rail, ..agent(text) };
+        let code = |text| Markup { block: Block::Code, ..agent(text) };
+        let styled = styled(&[rail("```rust"), code("let x = 1;"), rail("```"), agent("after")]);
 
+        assert_eq!(fg(&styled, 0, 0), Some(p.overlay0));
+        assert_eq!(fg(&styled, 2, 0), Some(p.overlay0));
         // The body is colored by syntect, so `let` differs from the text that follows it.
-        let body = styled.get(1).map(|s| (s.at(0).fg, s.at(4).fg));
-        assert!(matches!(body, Some((Some(_), Some(_)))));
-        assert_ne!(body.map(|(a, b)| a == b), Some(true));
-
-        // Markdown styling resumes after the closing rail.
+        assert!(fg(&styled, 1, 0).is_some());
+        assert_ne!(fg(&styled, 1, 0), fg(&styled, 1, 4));
         assert_eq!(styled.get(3).map(|s| s.at(0)), Some(Style::new()));
     }
 
     #[test]
-    fn markdown_inside_a_fence_stays_literal() {
-        let styled = styled(&[agent("```"), agent("# not a heading"), agent("```")]);
+    fn an_untagged_fence_leaves_its_body_in_the_base_style() {
+        let rail = |text| Markup { block: Block::Rail, ..agent(text) };
+        let styled = styled(&[rail("```"), Markup { block: Block::Code, ..agent("# literal") }]);
         assert_eq!(styled.get(1).map(|s| s.at(0)), Some(Style::new()));
     }
 
     #[test]
-    fn an_unclosed_fence_still_highlights_what_it_has() {
-        // The transcript is being appended to, so the last fence is often still open.
-        let styled = styled(&[agent("```rust"), agent("let x = 1;")]);
-        assert!(styled.get(1).is_some_and(|s| s.at(0) != Style::new()));
+    fn a_user_turn_is_left_unstyled() {
+        let user = Markup { tone: Tone::User, block: Block::Heading(1), ..agent("my prompt") };
+        assert_eq!(styled(&[user]).first().map(|s| s.at(0)), Some(Style::new()));
     }
 
     #[test]
-    fn a_user_turn_is_left_unstyled_and_ends_any_open_fence() {
-        let user = SourceLine { text: "# my prompt", tone: Tone::User };
-        let styled = styled(&[agent("```rust"), agent("let x = 1;"), user]);
-        assert_eq!(styled.get(2).map(|s| s.at(0)), Some(Style::new()));
+    fn a_heading_opens_in_its_accent_and_a_span_inside_it_still_reads() {
+        let p = theme::default_theme().palette;
+        let strong =
+            [Span { from: 6, to: 10, emphasis: Emphasis { strong: true, ..<_>::default() } }];
+        let line = Markup { block: Block::Heading(1), spans: &strong, ..agent("Title bold") };
+        let styled = styled(&[line]);
+
+        assert_eq!(fg(&styled, 0, 0), Some(p.heading));
+        assert_eq!(fg(&styled, 0, 6), Some(p.strong));
+        assert_eq!(fg(&styled, 0, 10), Some(p.heading));
+        assert!(styled.first().is_some_and(|s| s.at(6).add_modifier.contains(Modifier::BOLD)));
+    }
+
+    #[test]
+    fn a_blockquote_paints_a_rule_and_carries_its_prose_on() {
+        let p = theme::default_theme().palette;
+        let line = Markup { block: Block::Quote(2), ..agent("> quoted") };
+        let styled = styled(&[line]);
+
+        assert_eq!(styled.first().and_then(LineStyle::display), Some("│ quoted"));
+        assert_eq!(fg(&styled, 0, 0), Some(p.overlay0));
+        assert_eq!(fg(&styled, 0, 2), None);
+    }
+
+    #[test]
+    fn a_bullet_is_accented_and_a_rule_is_all_marker() {
+        let p = theme::default_theme().palette;
+        let bullet = Markup { block: Block::Bullet { at: 0, len: 1 }, ..agent("- item") };
+        let styled = styled(&[bullet, Markup { block: Block::Rule, ..agent("---") }]);
+
+        assert_eq!(fg(&styled, 0, 0), Some(p.code));
+        assert_eq!(fg(&styled, 0, 2), None);
+        assert_eq!(fg(&styled, 1, 2), Some(p.overlay0));
     }
 
     #[test]
     fn a_table_claims_its_own_rows_and_prose_resumes_after_them() {
+        let row = |text| Markup { block: Block::TableRow, ..agent(text) };
         let styled = styled(&[
-            agent("| a | b |"),
-            agent("|---|---|"),
-            agent("| 1 | 2 |"),
-            agent("**after**"),
+            row("| a | b |"),
+            Markup { block: Block::Rule, ..agent("|---|---|") },
+            row("| 1 | 2 |"),
+            agent("after"),
         ]);
+
         assert!(styled.first().is_some_and(|s| s.display().is_some()));
         assert!(styled.get(2).is_some_and(|s| s.display().is_some()));
         assert!(styled.get(3).is_some_and(|s| s.display().is_none()));
+    }
+
+    #[test]
+    fn a_table_too_wide_to_draw_falls_back_to_dim_pipes() {
+        let p = theme::default_theme().palette;
+        let wide = "| ".to_owned() + &"x".repeat(200) + " |";
+        let styled = styled(&[
+            Markup { block: Block::TableRow, ..agent(&wide) },
+            Markup { block: Block::Rule, ..agent("|---|") },
+        ]);
+
+        assert!(styled.first().is_some_and(|s| s.display().is_none()));
+        assert_eq!(fg(&styled, 0, 0), Some(p.overlay0));
+        assert_eq!(fg(&styled, 0, 2), None);
     }
 }

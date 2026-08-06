@@ -1,17 +1,10 @@
 //! What the app hands the paint layer, and what the paint layer hands back.
 
+use markup::{Block, Pos, Span, Tone};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
 use crate::{style::LineStyle, theme::Palette};
-
-/// Who wrote a line, as far as painting is concerned.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tone {
-    Agent,
-    User,
-    Gap,
-}
 
 /// One source line, as the paint layer sees it.
 #[derive(Debug, Clone, Copy)]
@@ -20,14 +13,16 @@ pub struct SourceLine<'a> {
     pub tone: Tone,
 }
 
-/// A source line and a character offset into it. Ordering is reading order.
+/// One line ready to be colored: what it says, who said it, what it is, and how it reads.
 ///
-/// Mirrors `transcript::Pos`; the app maps between the two each frame, so the paint layer
-/// stays free of the transcript.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Pos {
-    pub line: usize,
-    pub col: usize,
+/// What [`crate::analyze`] takes, as opposed to what a frame paints — spans are only ever an
+/// input to the one-off styling pass, never carried through a redraw.
+#[derive(Debug, Clone, Copy)]
+pub struct Markup<'a> {
+    pub text: &'a str,
+    pub tone: Tone,
+    pub block: Block,
+    pub spans: &'a [Span],
 }
 
 /// A banked quote+question pair, in the shape the gutter and its card need.
@@ -40,6 +35,8 @@ pub struct Banked<'a> {
     pub to: usize,
     /// Empty for a bare quote, which gets a gutter mark but no card.
     pub question: &'a str,
+    /// First line of the quote, as the card titles itself.
+    pub quote: &'a str,
 }
 
 /// Where the buffer starts painting.
@@ -114,6 +111,11 @@ impl Painted {
     /// First source line this frame painted.
     pub fn top(&self) -> usize {
         self.top
+    }
+
+    /// Columns of text the frame painted into, past the gutter.
+    pub fn width(&self) -> usize {
+        usize::from(self.area.width)
     }
 
     /// The character under a screen cell, and whether its line only selects whole.

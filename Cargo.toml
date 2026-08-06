@@ -27,6 +27,7 @@ two-face = { version = "0.5.1", default-features = false, features = ["syntect-f
 unicode-width = { version = "0.2", default-features = false, features = ["cjk"] }
 export = { path = "crates/export" }
 herdr = { path = "crates/herdr" }
+markup = { path = "crates/markup" }
 transcript = { path = "crates/transcript" }
 ui = { path = "crates/ui" }
 
@@ -72,6 +73,7 @@ anyhow.workspace = true
 ratatui.workspace = true
 export.workspace = true
 herdr.workspace = true
+markup = { workspace = true, features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

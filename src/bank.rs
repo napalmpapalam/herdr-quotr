@@ -1,7 +1,7 @@
 //! The quote+question pairs waiting to go out together, and the actions that steer them.
 
+use markup::Pos;
 use serde::{Deserialize, Serialize};
-use transcript::Pos;
 
 use crate::app::{App, Mode};
 
@@ -82,7 +82,22 @@ impl App {
         };
         self.clear_range();
         self.mode = Mode::Browse;
+        self.reveal_card(index);
         self.status = format!("pair {} saved — {} banked, S sends", index + 1, self.bank.len());
+    }
+
+    /// A card hangs under the last line of its quote. Bank one at the foot of the viewport and
+    /// the rows land below it, so the viewport comes down to meet them.
+    fn reveal_card(&mut self, index: usize) {
+        let Some(pair) = self.bank.get(index) else { return };
+        let rows = ui::card_rows(&pair.question, self.painted.width());
+        // A card row is at least one source line tall, so counting them as lines never
+        // undershoots — the card always ends up on screen.
+        let wanted = pair.to.line + rows + 1;
+        let overflow = wanted.saturating_sub(self.scroll + self.painted.page());
+        let last = self.transcript.lines().len().saturating_sub(1);
+
+        self.scroll = self.scroll.saturating_add(overflow).min(last);
     }
 
     /// Write the question onto the pair `e` reopened, or anchor a new pair to the live
@@ -149,7 +164,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use transcript::Pos;
+    use markup::Pos;
 
     use super::{Bank, Pair};
 

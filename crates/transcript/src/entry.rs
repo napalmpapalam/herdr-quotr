@@ -3,7 +3,9 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{LineKind, command};
+use markup::Tone;
+
+use crate::command;
 
 /// One transcript line; `Other` swallows the kinds quotr ignores.
 #[derive(Debug, Deserialize)]
@@ -17,10 +19,10 @@ pub(crate) enum Entry {
 
 impl Entry {
     /// The turn's visible text, or `None` if this entry isn't one.
-    pub(crate) fn into_turn(self) -> Option<(LineKind, String)> {
+    pub(crate) fn into_turn(self) -> Option<(Tone, String)> {
         match self {
-            Self::Assistant(turn) => turn.into_text(LineKind::Agent),
-            Self::User(turn) => turn.into_text(LineKind::User),
+            Self::Assistant(turn) => turn.into_text(Tone::Agent),
+            Self::User(turn) => turn.into_text(Tone::User),
             Self::Other => None,
         }
     }
@@ -50,7 +52,7 @@ pub(crate) struct Turn {
 }
 
 impl Turn {
-    fn into_text(self, kind: LineKind) -> Option<(LineKind, String)> {
+    fn into_text(self, kind: Tone) -> Option<(Tone, String)> {
         if self.is_noise() {
             return None;
         }
@@ -78,24 +80,25 @@ struct Message {
 #[serde(untagged)]
 enum Content {
     Text(String),
-    Blocks(Vec<Block>),
+    Parts(Vec<Part>),
 }
 
 impl Content {
     fn into_text(self) -> String {
         match self {
             Self::Text(text) => text,
-            Self::Blocks(blocks) => {
-                blocks.into_iter().filter_map(Block::into_text).collect::<Vec<_>>().join("\n")
+            Self::Parts(parts) => {
+                parts.into_iter().filter_map(Part::into_text).collect::<Vec<_>>().join("\n")
             }
         }
     }
 }
 
-/// `tool_use`, `tool_result`, and `thinking` blocks all fall through to `Other`.
+/// One piece of a message's content. `tool_use`, `tool_result`, and `thinking` all fall
+/// through to `Other`. Named for the JSONL, not for [`crate::Block`], which is unrelated.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-enum Block {
+enum Part {
     Text {
         text: String,
     },
@@ -103,7 +106,7 @@ enum Block {
     Other,
 }
 
-impl Block {
+impl Part {
     fn into_text(self) -> Option<String> {
         let Self::Text { text } = self else { return None };
         Some(text)

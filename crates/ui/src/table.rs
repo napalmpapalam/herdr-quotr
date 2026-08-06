@@ -8,10 +8,13 @@
 use ratatui::style::Style;
 use unicode_width::UnicodeWidthStr;
 
+use markup::Span;
+
 use crate::{
     markdown,
     style::{LineStyle, Run},
     theme::Palette,
+    view::Markup,
 };
 
 /// Where a cell's content sits, from the `:---:` delimiter row.
@@ -22,11 +25,21 @@ enum Align {
     Right,
 }
 
+/// One cell's text and where it started in the source row, which is what carries the row's
+/// emphasis spans across the padding into the grid.
+#[derive(Debug)]
+struct Cell {
+    at: usize,
+    text: String,
+}
+
 /// A table found in the source: its lines, and the cells parsed out of them.
 #[derive(Debug)]
 pub(crate) struct Table {
     /// Rendered text for each source line the table covers, in order.
     rows: Vec<String>,
+    /// Each row's emphasis, moved into rendered coordinates.
+    spans: Vec<Vec<Span>>,
     /// The border above the first row and below the last — chrome with no source line.
     top: String,
     bottom: String,
@@ -37,17 +50,18 @@ pub(crate) struct Table {
 impl Table {
     /// The rendered table starting at `lines[0]`, or `None` when this is not a table or the
     /// grid would not fit `width` — a table too wide to draw stays raw markdown, which wraps.
-    pub(crate) fn parse(lines: &[&str], width: usize) -> Option<Self> {
-        let header = cells(lines.first()?)?;
-        let aligns = alignments(lines.get(1)?)?;
+    pub(crate) fn parse(lines: &[Markup<'_>], width: usize) -> Option<Self> {
+        let header = cells(lines.first()?.text)?;
+        let aligns = alignments(lines.get(1)?.text)?;
         let columns = header.len().max(aligns.len());
-        let body: Vec<Vec<String>> = lines.iter().skip(2).map_while(|line| cells(line)).collect();
+        let body: Vec<Vec<Cell>> =
+            lines.iter().skip(2).map_while(|line| cells(line.text)).collect();
 
         let mut widths = vec![0; columns];
         for row in std::iter::once(&header).chain(&body) {
             for (i, cell) in row.iter().enumerate() {
                 if let Some(slot) = widths.get_mut(i) {
-                    *slot = (*slot).max(cell.width());
+                    *slot = (*slot).max(cell.text.width());
                 }
             }
         }
@@ -57,10 +71,25 @@ impl Table {
             return None;
         }
 
-        let mut rows = vec![row_text(&header, &widths, &aligns), rule(&widths, '├', '┼', '┤')];
-        rows.extend(body.iter().map(|cells| row_text(cells, &widths, &aligns)));
+        let mut rows = Vec::with_capacity(body.len() + 2);
+        let mut spans = Vec::with_capacity(body.len() + 2);
+        let (text, starts) = row_text(&header, &widths, &aligns);
+        rows.push(text);
+        spans.push(moved(lines.first()?.spans, &header, &starts));
+        // The delimiter row is all rule: it renders as one and carries no emphasis.
+        rows.push(rule(&widths, '├', '┼', '┤'));
+        spans.push(Vec::new());
+
+        for (index, cells) in body.iter().enumerate() {
+            let (text, starts) = row_text(cells, &widths, &aligns);
+            let source = lines.get(index + 2).map_or(&[][..], |line| line.spans);
+            rows.push(text);
+            spans.push(moved(source, cells, &starts));
+        }
+
         Some(Self {
             rows,
+            spans,
             top: rule(&widths, '┌', '┬', '┐'),
             bottom: rule(&widths, '└', '┴', '┘'),
             rules: boundaries(&widths),
@@ -86,14 +115,15 @@ impl Table {
             .iter()
             .enumerate()
             .map(|(index, text)| {
-                // A delimiter row is all rule; every other row styles its cells like prose,
-                // against the rendered text rather than the source it was padded from.
+                // A delimiter row is all rule; every other row keeps the emphasis its source
+                // carried, moved into the padded cell it now sits in.
                 let line = if index == 1 {
                     LineStyle::new(vec![Run::new(0, dim)])
                 } else {
                     let mut runs = rules.clone();
-                    // Pushed last, so an inline span wins a rule at the same offset.
-                    runs.extend(markdown::inline_runs(text, p));
+                    // Pushed last, so an emphasis run wins a rule at the same offset.
+                    let spans = self.spans.get(index).map_or(&[][..], Vec::as_slice);
+                    runs.extend(markdown::runs_of(spans, Style::new(), p));
                     runs.sort_by_key(Run::start);
                     LineStyle::new(runs)
                 };
@@ -105,12 +135,51 @@ impl Table {
     }
 }
 
-/// A row's cells, or `None` when the line is not a pipe-table row.
-fn cells(line: &str) -> Option<Vec<String>> {
-    let trimmed = line.trim();
-    let inner = trimmed.strip_prefix('|')?;
-    let inner = inner.strip_suffix('|').unwrap_or(inner);
-    Some(inner.split('|').map(|cell| cell.trim().to_owned()).collect())
+/// A row's cells, or `None` when the line is not a pipe-table row. Each cell remembers the
+/// character it started at, so the row's emphasis can follow it into the grid.
+fn cells(line: &str) -> Option<Vec<Cell>> {
+    let chars: Vec<char> = line.chars().collect();
+    let start = chars.iter().position(|c| !c.is_whitespace())?;
+    if chars.get(start) != Some(&'|') {
+        return None;
+    }
+    let end = chars.iter().rposition(|c| !c.is_whitespace()).map_or(start, |at| at + 1);
+
+    let bars: Vec<usize> = (start + 1..end).filter(|&at| chars.get(at) == Some(&'|')).collect();
+    let mut out = Vec::with_capacity(bars.len() + 1);
+    let mut from = start + 1;
+    for &at in &bars {
+        out.push(cell(&chars, from, at));
+        from = at + 1;
+    }
+    if from < end {
+        out.push(cell(&chars, from, end));
+    }
+
+    Some(out)
+}
+
+/// One cell: the characters `from..to` with their surrounding spaces dropped.
+fn cell(chars: &[char], from: usize, to: usize) -> Cell {
+    let lead = (from..to).take_while(|&at| chars.get(at) == Some(&' ')).count();
+    let trail = (from + lead..to).rev().take_while(|&at| chars.get(at) == Some(&' ')).count();
+
+    Cell {
+        at: from + lead,
+        text: chars.get(from + lead..to - trail).unwrap_or_default().iter().collect(),
+    }
+}
+
+/// A row's spans, moved from source offsets into the rendered row's padded cells.
+fn moved(spans: &[Span], cells: &[Cell], starts: &[usize]) -> Vec<Span> {
+    cells
+        .iter()
+        .zip(starts)
+        .flat_map(|(cell, &at)| {
+            let end = cell.at + cell.text.chars().count();
+            spans.iter().filter_map(move |span| span.shift(cell.at, end, at))
+        })
+        .collect()
 }
 
 /// Per-column alignment from a `|:--|:-:|--:|` row, or `None` when it is not one.
@@ -121,7 +190,7 @@ fn alignments(line: &str) -> Option<Vec<Align>> {
         return None;
     }
 
-    cells.iter().map(|cell| align_of(cell)).collect()
+    cells.iter().map(|cell| align_of(&cell.text)).collect()
 }
 
 /// One delimiter cell's alignment: `:` marks the side content sits against. `None` when the
@@ -139,11 +208,13 @@ fn align_of(cell: &str) -> Option<Align> {
     })
 }
 
-/// One grid row: `│ cell │ cell │`, each cell padded to its column and aligned.
-fn row_text(cells: &[String], widths: &[usize], aligns: &[Align]) -> String {
+/// One grid row: `│ cell │ cell │`, each cell padded to its column and aligned. Also hands
+/// back where each cell's text starts, which is what carries its emphasis across.
+fn row_text(cells: &[Cell], widths: &[usize], aligns: &[Align]) -> (String, Vec<usize>) {
     let mut out = String::from("│");
+    let mut starts = Vec::with_capacity(widths.len());
     for (index, &width) in widths.iter().enumerate() {
-        let cell = cells.get(index).map_or("", String::as_str);
+        let cell = cells.get(index).map_or("", |cell| cell.text.as_str());
         let pad = width.saturating_sub(cell.width());
         let align = aligns.get(index).copied().unwrap_or(Align::Left);
         let (left, right) = match align {
@@ -153,12 +224,13 @@ fn row_text(cells: &[String], widths: &[usize], aligns: &[Align]) -> String {
         };
         out.push(' ');
         out.push_str(&" ".repeat(left));
+        starts.push(out.chars().count());
         out.push_str(cell);
         out.push_str(&" ".repeat(right));
         out.push(' ');
         out.push('│');
     }
-    out
+    (out, starts)
 }
 
 /// A horizontal rule with the given corner and junction characters.
@@ -185,16 +257,49 @@ fn boundaries(widths: &[usize]) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Align, Table, alignments, cells};
-    use crate::theme;
+    use markup::{Block, Emphasis, Span, Tone};
 
+    use super::{Align, Table, alignments, cells};
+    use crate::{theme, view::Markup};
+
+    /// The fixture as the transcript hands it over: markers already stripped, and `code`
+    /// carrying the emphasis its backticks used to say.
     const SRC: [&str; 4] =
-        ["| slot | hue |", "|---|:-:|", "| `code` | orange |", "| strong | yellow |"];
+        ["| slot | hue |", "|---|:-:|", "| code | orange |", "| strong | yellow |"];
+
+    const CODE: [Span; 1] = [Span {
+        from: 2,
+        to: 6,
+        emphasis: Emphasis {
+            code: true,
+            strong: false,
+            italic: false,
+            struck: false,
+            link: false,
+            dim: false,
+        },
+    }];
+
+    fn rows() -> Vec<Markup<'static>> {
+        SRC.iter()
+            .enumerate()
+            .map(|(index, text)| Markup {
+                text,
+                tone: Tone::Agent,
+                block: Block::TableRow,
+                spans: if index == 2 { &CODE } else { &[] },
+            })
+            .collect()
+    }
 
     #[test]
     fn a_row_splits_into_trimmed_cells() {
-        assert_eq!(cells("| a | bb |"), Some(vec!["a".to_owned(), "bb".to_owned()]));
-        assert_eq!(cells("no pipes"), None);
+        let split = cells("| a | bb |").unwrap_or_default();
+        assert_eq!(
+            split.iter().map(|cell| (cell.at, cell.text.as_str())).collect::<Vec<_>>(),
+            [(2, "a"), (6, "bb")]
+        );
+        assert!(cells("no pipes").is_none());
     }
 
     #[test]
@@ -209,19 +314,19 @@ mod tests {
     /// The shipped fixture, rendered. Empty when it failed to parse, which every test that
     /// uses it then fails on.
     fn drawn_styles() -> Vec<crate::style::LineStyle> {
-        Table::parse(&SRC, 80)
+        Table::parse(&rows(), 80)
             .map(|t| t.styles(&theme::default_theme().palette))
             .unwrap_or_default()
     }
 
     #[test]
     fn a_table_draws_a_grid_the_width_of_its_widest_cell() {
-        assert_eq!(Table::parse(&SRC, 80).map(|t| t.len()), Some(SRC.len()));
+        assert_eq!(Table::parse(&rows(), 80).map(|t| t.len()), Some(SRC.len()));
         let styles = drawn_styles();
         let drawn: Vec<&str> = styles.iter().filter_map(|s| s.display()).collect();
         assert_eq!(drawn.first(), Some(&"│ slot   │  hue   │"));
         assert_eq!(drawn.get(1), Some(&"├────────┼────────┤"));
-        assert_eq!(drawn.get(2), Some(&"│ `code` │ orange │"));
+        assert_eq!(drawn.get(2), Some(&"│ code   │ orange │"));
         // Every row is the same width, so the grid lines up.
         assert!(drawn.iter().all(|row| row.chars().count() == 19));
     }
@@ -251,20 +356,25 @@ mod tests {
     fn cell_contents_are_styled_like_prose() {
         let p = theme::default_theme().palette;
         let styles = drawn_styles();
-        // "│ `code` │ orange │" — the backtick dims and the word inside takes the code accent.
+        // "│ code   │ orange │" — the source cell's emphasis follows it into the padding.
         let at = |col: usize| styles.get(2).map(|row| row.at(col).fg);
         assert_eq!(at(0), Some(Some(p.overlay0))); // the grid rule
-        assert_eq!(at(2), Some(Some(p.overlay0))); // the backtick
-        assert_eq!(at(3), Some(Some(p.code))); // the code inside it
+        assert_eq!(at(2), Some(Some(p.code))); // the cell that was `code`
+        assert_eq!(at(6), Some(None)); // the padding after it
+        assert_eq!(at(11), Some(None)); // an unemphasized cell
     }
 
     #[test]
     fn a_grid_too_wide_to_draw_stays_raw_markdown() {
-        assert!(Table::parse(&SRC, 12).is_none());
+        assert!(Table::parse(&rows(), 12).is_none());
     }
 
     #[test]
     fn a_row_without_a_delimiter_under_it_is_not_a_table() {
-        assert!(Table::parse(&["| a | b |", "just prose"], 80).is_none());
+        let loose: Vec<Markup<'_>> = ["| a | b |", "just prose"]
+            .iter()
+            .map(|text| Markup { text, tone: Tone::Agent, block: Block::TableRow, spans: &[] })
+            .collect();
+        assert!(Table::parse(&loose, 80).is_none());
     }
 }

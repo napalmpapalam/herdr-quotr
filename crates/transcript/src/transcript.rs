@@ -8,11 +8,9 @@ use std::{
 
 use anyhow::{Context, Result};
 
-use crate::{
-    entry::Entry,
-    line::{LineKind, SourceLine},
-    pos::Pos,
-};
+use markup::{Block, Pos, Tone};
+
+use crate::{entry::Entry, line::SourceLine, markdown};
 
 #[derive(Debug, Default)]
 pub struct Transcript {
@@ -46,7 +44,7 @@ impl Transcript {
             .get(from.line + 1..to.line)
             .unwrap_or_default()
             .iter()
-            .filter(|line| line.kind != LineKind::Gap)
+            .filter(|line| line.tone != Tone::Gap)
             .map(|line| line.text.as_str());
         let tail = self.lines.get(to.line).and_then(|last| non_empty(last.slice(0, to.col)));
         non_empty(first.slice(from.col, first.len()))
@@ -84,38 +82,58 @@ impl Transcript {
 
     /// Skips malformed lines: a live transcript can hand us a half-written last one.
     fn read(reader: impl BufRead) -> Self {
-        let mut turns: Vec<(LineKind, String)> = Vec::new();
+        let mut turns: Vec<(Tone, String)> = Vec::new();
         let entries = reader
             .lines()
             .map_while(Result::ok)
             .filter_map(|line| serde_json::from_str::<Entry>(&line).ok())
             .filter_map(Entry::into_turn);
-        for (kind, text) in entries {
+        for (tone, text) in entries {
             // Tool calls split one answer across entries; for quoting it is still one turn.
             match turns.last_mut() {
-                Some((last, body)) if *last == kind => {
+                Some((last, body)) if *last == tone => {
                     body.push_str("\n\n");
                     body.push_str(&text);
                 }
-                _ => turns.push((kind, text)),
+                _ => turns.push((tone, text)),
             }
         }
         Self::from_turns(&turns)
     }
 
-    fn from_turns(turns: &[(LineKind, String)]) -> Self {
+    fn from_turns(turns: &[(Tone, String)]) -> Self {
         let mut lines: Vec<SourceLine> = Vec::new();
         let mut starts = Vec::with_capacity(turns.len());
-        for (kind, body) in turns {
+        for (tone, body) in turns {
             if !lines.is_empty() {
-                lines.push(SourceLine { text: String::new(), kind: LineKind::Gap });
+                lines.push(SourceLine::gap());
             }
             starts.push(lines.len());
-            lines
-                .extend(body.lines().map(|text| SourceLine { text: text.to_owned(), kind: *kind }));
+            lines.extend(turn_lines(*tone, body));
         }
         Self { lines, starts }
     }
+}
+
+/// One turn's lines. A user prompt is left exactly as typed — it reads dim as a whole, and
+/// quoting it back should reproduce what the person wrote; only agent markdown is stripped.
+fn turn_lines(tone: Tone, body: &str) -> Vec<SourceLine> {
+    if tone != Tone::Agent {
+        return body
+            .lines()
+            .map(|text| SourceLine {
+                text: text.to_owned(),
+                tone,
+                block: Block::Prose,
+                spans: Vec::new(),
+            })
+            .collect();
+    }
+
+    markdown::strip(body)
+        .into_iter()
+        .map(|line| SourceLine { text: line.text, tone, block: line.block, spans: line.spans })
+        .collect()
 }
 
 /// Drop a cut end that came out empty, so a drag starting at end of line adds no blank row.
@@ -125,7 +143,9 @@ fn non_empty(text: &str) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LineKind, Pos, Transcript};
+    use markup::{Pos, Tone};
+
+    use super::Transcript;
 
     const SAMPLE: &str = concat!(
         r#"{"type":"user","message":{"content":"first prompt"}}"#,
@@ -204,17 +224,10 @@ mod tests {
     #[test]
     fn marks_the_blank_row_between_turns_as_a_gap() {
         let t = sample();
-        let kinds: Vec<_> = t.lines().iter().map(|l| l.kind).collect();
+        let kinds: Vec<_> = t.lines().iter().map(|l| l.tone).collect();
         assert_eq!(
             kinds,
-            [
-                LineKind::User,
-                LineKind::Gap,
-                LineKind::Agent,
-                LineKind::Agent,
-                LineKind::Agent,
-                LineKind::Agent
-            ]
+            [Tone::User, Tone::Gap, Tone::Agent, Tone::Agent, Tone::Agent, Tone::Agent]
         );
     }
 }

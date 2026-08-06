@@ -10,7 +10,7 @@ pub fn block(lines: &[&str], question: Option<&str>) -> String {
 
 /// Join composed blocks with the `---` rule that separates them by hand.
 pub fn batch(blocks: &[String]) -> String {
-    blocks.join("\n\n---\n\n")
+    blocks.join("\n\n---\n")
 }
 
 #[cfg(test)]
@@ -36,7 +36,7 @@ mod tests {
     #[test]
     fn separates_blocks_with_a_rule_on_its_own_line() {
         let blocks = [block(&["one"], Some("why?")), block(&["two"], Some("and?"))];
-        assert_eq!(batch(&blocks), "\"one\"\n\nwhy?\n\n---\n\n\"two\"\n\nand?");
+        assert_eq!(batch(&blocks), "\"one\"\n\nwhy?\n\n---\n\"two\"\n\nand?");
     }
 
     #[test]

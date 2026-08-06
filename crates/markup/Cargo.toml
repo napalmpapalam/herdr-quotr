@@ -1,0 +1,19 @@
+[package]
+name = "markup"
+description = "The markdown vocabulary the transcript reads and the paint layer colors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Only the app serializes a position, into the stash it parks a batch in.
+serde = { workspace = true, optional = true }
+
+[features]
+serde = ["dep:serde"]
+
+[lints]
+workspace = true

@@ -1,21 +1,26 @@
 //! The unit the picker scrolls and quotes: one line of the transcript.
 
-/// Who a line came from. `Gap` is the blank row between turns, dropped from any quote.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LineKind {
-    Agent,
-    User,
-    Gap,
-}
+use markup::{Block, Span, Tone};
 
-/// One line of the transcript, exactly as written.
+/// One line of the transcript with its markdown markers read off it.
+///
+/// `text` is what the picker shows *and* what a quote sends — the two cannot drift, because
+/// there is only one string.
 #[derive(Debug, Clone)]
 pub struct SourceLine {
     pub text: String,
-    pub kind: LineKind,
+    pub tone: Tone,
+    pub block: Block,
+    /// Emphasis over `text`, in order and non-overlapping.
+    pub spans: Vec<Span>,
 }
 
 impl SourceLine {
+    /// The blank row between two turns.
+    pub(crate) fn gap() -> Self {
+        Self { text: String::new(), tone: Tone::Gap, block: Block::Prose, spans: Vec::new() }
+    }
+
     /// Characters in the line — the unit a selection column counts, not bytes.
     pub fn len(&self) -> usize {
         self.text.chars().count()
@@ -40,10 +45,15 @@ fn byte_at(text: &str, col: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{LineKind, SourceLine};
+    use super::{Block, SourceLine, Tone};
 
     fn line(text: &str) -> SourceLine {
-        SourceLine { text: text.to_owned(), kind: LineKind::Agent }
+        SourceLine {
+            text: text.to_owned(),
+            tone: Tone::Agent,
+            block: Block::Prose,
+            spans: Vec::new(),
+        }
     }
 
     #[test]

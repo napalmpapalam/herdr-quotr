@@ -8,6 +8,8 @@ use ratatui::style::Color;
 pub struct Palette {
     /// Fill behind the live selection.
     pub select_bg: Color,
+    /// Fill behind the footer, so the chrome reads as a surface of its own.
+    pub bar: Color,
     /// Markdown markers, the bank gutter, card borders, the status line.
     pub overlay0: Color,
     /// What [`Palette::on_fill`] lifts `overlay0` to, and where deep headings land.
@@ -26,8 +28,8 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// Lift a color onto the selection fill. `overlay0` sits one surface step above the fill
-    /// and all but vanishes on it, so it rises to `subtext0`; everything else passes through.
+    /// Lift a color onto a filled surface — the selection or the footer bar. `overlay0` sits
+    /// one surface step above them and all but vanishes; everything else passes through.
     pub fn on_fill(&self, color: Color) -> Color {
         if color == self.overlay0 { self.subtext0 } else { color }
     }
@@ -82,19 +84,25 @@ const fn hex(rgb: u32) -> Color {
 const DARK_FILL: f64 = 0.13;
 const LIGHT_FILL: f64 = 0.07;
 
+/// How far the footer bar steps. Shallower than the selection fill: enough to read as its own
+/// surface, not enough to compete with the prose or to swallow the dim markers on it.
+const DARK_BAR: f64 = 0.07;
+const LIGHT_BAR: f64 = 0.04;
+
 const WHITE: Color = Color::Rgb(0xff, 0xff, 0xff);
 const BLACK: Color = Color::Rgb(0x00, 0x00, 0x00);
 
 /// Build a full palette from anchors: surfaces step `base` toward the contrast pole.
 pub(super) fn derive(a: Anchors, appearance: Appearance) -> Palette {
-    let (pole, fill) = match appearance {
-        Appearance::Dark => (WHITE, DARK_FILL),
-        Appearance::Light => (BLACK, LIGHT_FILL),
+    let (pole, fill, bar) = match appearance {
+        Appearance::Dark => (WHITE, DARK_FILL, DARK_BAR),
+        Appearance::Light => (BLACK, LIGHT_FILL, LIGHT_BAR),
     };
     let subtext0 = blend(a.text, a.base, 0.18);
 
     Palette {
         select_bg: blend(a.base, pole, fill),
+        bar: blend(a.base, pole, bar),
         overlay0: blend(a.base, pole, 0.26),
         subtext0,
         text: a.text,

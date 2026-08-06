@@ -13,11 +13,12 @@ mod view;
 mod wrap;
 
 pub use crate::{
+    card::rows as card_rows,
     column::{MAX_WIDTH, content_column},
     markdown::analyze,
     style::LineStyle,
     theme::{NAMES as THEMES, Palette, Theme},
-    view::{Banked, Hit, Painted, Pos, Scroll, SourceLine, Tone, View},
+    view::{Banked, Hit, Markup, Painted, Scroll, SourceLine, View},
 };
 
 use ratatui::{

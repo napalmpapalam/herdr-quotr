@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 use ratatui::{
     DefaultTerminal,
     crossterm::{
+        cursor::SetCursorStyle,
         event::{
             self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
             KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -20,8 +21,7 @@ use ratatui::{
         execute,
     },
 };
-use transcript::{LineKind, Pos};
-use ui::{Painted, Tone};
+use ui::Painted;
 
 use crate::app::{App, Grain};
 
@@ -33,11 +33,12 @@ const WHEEL: isize = 1;
 pub fn run() -> Result<()> {
     let mut app = App::new(herdr::agent_pane());
     let mut terminal = ratatui::init();
-    // Mouse capture buys drag-to-select and costs the terminal's own text selection.
-    let result = execute!(io::stdout(), EnableMouseCapture)
+    // Mouse capture buys drag-to-select and costs the terminal's own text selection. The caret
+    // is a reading position, not an insertion point, so it holds steady rather than blinking.
+    let result = execute!(io::stdout(), EnableMouseCapture, SetCursorStyle::SteadyBlock)
         .context("enabling mouse capture")
         .and_then(|()| event_loop(&mut terminal, &mut app));
-    let _ = execute!(io::stdout(), DisableMouseCapture);
+    let _ = execute!(io::stdout(), DisableMouseCapture, SetCursorStyle::DefaultUserShape);
     ratatui::restore();
     result
 }
@@ -62,7 +63,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
         .transcript
         .lines()
         .iter()
-        .map(|line| ui::SourceLine { text: &line.text, tone: tone(line.kind) })
+        .map(|line| ui::SourceLine { text: &line.text, tone: line.tone })
         .collect();
     let banked: Vec<ui::Banked<'_>> = app
         .bank
@@ -73,6 +74,7 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
             from: pair.from.line,
             to: pair.to.line,
             question: pair.question.trim(),
+            quote: app.transcript.slice(pair.from, pair.to).first().copied().unwrap_or_default(),
         })
         .collect();
     let view = ui::View {
@@ -80,8 +82,8 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
         styles: &app.styles,
         palette: app.theme.palette,
         turns: app.transcript.turn_starts(),
-        cursor: to_screen(app.cursor),
-        selection: app.selection().map(|(from, to)| (to_screen(from), to_screen(to))),
+        cursor: app.cursor,
+        selection: app.selection(),
         banked: &banked,
         scroll: if app.opening { ui::Scroll::Bottom } else { ui::Scroll::From(app.scroll) },
         question: app.asking().then_some(app.question.as_str()),
@@ -90,19 +92,6 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
     let mut painted = Painted::default();
     terminal.draw(|f| painted = ui::render(f, &view))?;
     Ok(painted)
-}
-
-/// The app's own position type, in the shape the paint layer takes.
-fn to_screen(pos: Pos) -> ui::Pos {
-    ui::Pos { line: pos.line, col: pos.col }
-}
-
-pub(crate) fn tone(kind: LineKind) -> Tone {
-    match kind {
-        LineKind::Agent => Tone::Agent,
-        LineKind::User => Tone::User,
-        LineKind::Gap => Tone::Gap,
-    }
 }
 
 fn handle_key(app: &mut App, key: KeyEvent) {

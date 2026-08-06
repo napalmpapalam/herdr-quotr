@@ -5,10 +5,11 @@
 
 use anyhow::{Context, Result};
 use herdr::{AGENT_PANE_ENV, PaneId};
-use transcript::{Pos, SessionId, Transcript};
+use markup::Pos;
+use transcript::{SessionId, Transcript};
 use ui::{LineStyle, Painted, Theme};
 
-use crate::{bank::Bank, config, stash, tone};
+use crate::{bank::Bank, config, stash};
 
 /// Whether the question box is up.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +72,7 @@ impl App {
             status = format!("{e:#}");
             ui::theme::default_theme()
         });
-        let styles = ui::analyze(&source_lines(&transcript), &theme);
+        let styles = analyze(&transcript, &theme);
         let last = transcript.lines().len().saturating_sub(1);
         let mut app = Self {
             agent_pane,
@@ -200,11 +201,18 @@ fn load(pane: Option<&PaneId>) -> Result<(SessionId, Transcript)> {
     Ok((session, transcript))
 }
 
-/// The transcript in the shape the paint layer styles, borrowed just long enough to analyze.
-fn source_lines(transcript: &Transcript) -> Vec<ui::SourceLine<'_>> {
-    transcript
+/// Color the whole transcript once, in the shape the paint layer takes.
+fn analyze(transcript: &Transcript, theme: &Theme) -> Vec<LineStyle> {
+    let markup: Vec<ui::Markup<'_>> = transcript
         .lines()
         .iter()
-        .map(|line| ui::SourceLine { text: &line.text, tone: tone(line.kind) })
-        .collect()
+        .map(|line| ui::Markup {
+            text: &line.text,
+            tone: line.tone,
+            block: line.block,
+            spans: &line.spans,
+        })
+        .collect();
+
+    ui::analyze(&markup, theme)
 }

@@ -14,6 +14,9 @@ use crate::{
     wrap::wrap,
 };
 
+/// Blank rows left under the last line, so it never sits flush against the footer.
+const TAIL: usize = 2;
+
 /// The reading area. No border of its own — herdr's popup already frames the pane.
 pub(crate) fn render(f: &mut TerminalFrame, area: Rect, view: &View) -> Painted {
     let column = content_column(area);
@@ -23,7 +26,7 @@ pub(crate) fn render(f: &mut TerminalFrame, area: Rect, view: &View) -> Painted 
 
     let top = match view.scroll {
         Scroll::From(line) => line,
-        Scroll::Bottom => bottom_start(view, width, height),
+        Scroll::Bottom => bottom_start(view, width, height.saturating_sub(TAIL).max(1)),
     };
     let mut frame = Frame { drawn: Vec::with_capacity(height), painted: Vec::new(), lines: 0 };
 
@@ -109,8 +112,8 @@ impl Frame {
     }
 }
 
-/// The topmost source line that still leaves the last one on the bottom row. A line that
-/// would only half fit is left above the viewport rather than clipped.
+/// The topmost source line that still leaves the last one [`TAIL`] rows off the bottom. A line
+/// that would only half fit is left above the viewport rather than clipped.
 fn bottom_start(view: &View, width: usize, height: usize) -> usize {
     let mut rows = 0;
 
@@ -137,6 +140,6 @@ fn cards_under(banked: &[Banked], line: usize, width: usize, p: &Palette) -> Vec
     banked
         .iter()
         .filter(|pair| pair.to == line)
-        .flat_map(|pair| card::lines(pair.number, pair.question, width, p))
+        .flat_map(|pair| card::lines(pair.number, pair.question, pair.quote, width, p))
         .collect()
 }

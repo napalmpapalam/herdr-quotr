@@ -1,5 +1,6 @@
 //! One display row: its text, its styling, and the selection laid over both.
 
+use markup::{Pos, Tone};
 use ratatui::{
     style::Style,
     text::{Line, Span},
@@ -11,7 +12,7 @@ use crate::{
     column::padding,
     style::LineStyle,
     theme::Palette,
-    view::{Pos, Tone, View},
+    view::View,
     wrap::{Row, cut},
 };
 
