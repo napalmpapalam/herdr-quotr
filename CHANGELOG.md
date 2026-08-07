@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-07
+
+### Fixed
+
+- **A long question is no longer typed blind.** The question box wraps at the reading measure
+  and grows a row at a time instead of clipping everything past its right border; once it
+  reaches the height of the pane it stops growing and follows the caret.
+
 ## [0.1.0] - 2026-08-06
 
 First release.
@@ -32,5 +40,6 @@ First release.
   swallowed silently, so the batch is written to the plugin's state dir and restored on the
   next open instead.
 
-[Unreleased]: https://github.com/napalmpapalam/herdr-quotr/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/napalmpapalam/herdr-quotr/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/napalmpapalam/herdr-quotr/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/napalmpapalam/herdr-quotr/releases/tag/v0.1.0
