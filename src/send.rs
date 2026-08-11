@@ -38,7 +38,7 @@ impl App {
         self.should_quit = true;
     }
 
-    /// Park the batch for the next run, since the popup covers the prompt the user has to
+    /// Park the batch for the next run, since the picker covers the prompt the user has to
     /// answer before anything can be sent.
     ///
     /// Deliberately does not quit: the picker has to stay up long enough to be read, and a

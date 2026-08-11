@@ -57,7 +57,7 @@ broken_intra_doc_links = "deny"
 # The binary: terminal lifecycle and the event loop. All logic lives in `crates/*`.
 [package]
 name = "herdr-quotr"
-description = "Quote an agent's own response back at it, from a herdr popup."
+description = "Quote an agent's own response back at it, over the focused herdr pane."
 readme = "README.md"
 keywords = ["herdr", "tui", "agent", "claude", "quote"]
 categories = ["command-line-utilities", "development-tools"]

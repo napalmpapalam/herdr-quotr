@@ -17,7 +17,7 @@ use crate::{
 /// Blank rows left under the last line, so it never sits flush against the footer.
 const TAIL: usize = 2;
 
-/// The reading area. No border of its own — herdr's popup already frames the pane.
+/// The reading area. No border of its own — herdr already frames the pane.
 pub(crate) fn render(f: &mut TerminalFrame, area: Rect, view: &View) -> Painted {
     let column = content_column(area, view.measure);
     let text = text_area(column);

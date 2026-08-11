@@ -6,7 +6,7 @@ use ratatui::style::Color;
 /// happen to be — quotr keeps four accents, each with exactly one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Palette {
-    /// The pane's own fill. The popup is full-screen, so a light theme on a dark terminal has
+    /// The pane's own fill. The picker is full-screen, so a light theme on a dark terminal has
     /// to bring its own ground or it is unreadable.
     pub base: Color,
     /// Fill behind the live selection.

@@ -1,12 +1,12 @@
 # herdr-quotr
 
-A herdr plugin: a full-screen popup that reads the focused Claude Code session's transcript,
+A herdr plugin: a full-screen overlay that reads the focused Claude Code session's transcript,
 lets you select ranges and attach questions, and writes the batch into the agent's input box
 without submitting.
 
 ## Build and run
 
-The picker only runs inside a herdr popup, so there is no `cargo run` path. It is launched by
+The picker only runs inside a herdr pane, so there is no `cargo run` path. It is launched by
 absolute path from the plugin root, which means **a code change is invisible until you
 reinstall the binary**:
 

@@ -147,7 +147,7 @@ fn hex(color: Color) -> Option<String> {
     }
 }
 
-/// The rendered buffer as ANSI escapes, so a terminal shows what the popup would.
+/// The rendered buffer as ANSI escapes, so a terminal shows what the picker would.
 fn ansi(buffer: &Buffer) -> String {
     let area = buffer.area();
     let mut out = String::new();

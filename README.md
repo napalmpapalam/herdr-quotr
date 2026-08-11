@@ -53,7 +53,7 @@ herdr plugin link .
 ```
 
 `herdr plugin link` skips the download step, so rebuild and reinstall the binary after every
-change — the popup runs it by absolute path and won't pick up a stale one.
+change — the picker runs it by absolute path and won't pick up a stale one.
 
 ### Verify
 
@@ -123,7 +123,7 @@ The mouse is the primary input; the keyboard is a full fallback.
 In the question box: Enter banks, Esc goes back, Ctrl+U clears.
 
 Mouse capture is on while the picker is up, so the terminal's own text selection — and copying
-out of the popup — is unavailable there.
+out of the picker — is unavailable there.
 
 ## Configuration
 
@@ -149,8 +149,10 @@ in both: `vs-dark-plus`, `catppuccin`, `catppuccin-latte`, `catppuccin-frappe`,
 `solarized`, `solarized-light`, `github-light`, `monokai`, `tokyo-night`, `tokyo-night-day`,
 `rose-pine`, `rose-pine-dawn`. Run `cargo run --example themes` from a checkout to see them all.
 
-Placement isn't configurable: herdr accepts a popup placement only from a plugin's manifest,
-never from the CLI, so changing it means editing `herdr-plugin.toml`.
+Placement isn't configurable: the picker opens as an overlay over the focused tab, set in
+`herdr-plugin.toml`. A popup would cover the same area, but herdr treats one as session-modal
+and swallows its own keybindings while it is up, so switching workspace would mean quitting
+the picker first.
 
 ## Known limits
 

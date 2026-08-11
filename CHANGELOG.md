@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **herdr's own keybindings keep working while the picker is up.** The picker opened as a
+  popup, which herdr treats as session-modal: it swallowed the prefix chain, so switching
+  workspace or tab meant quitting the picker first. It now opens as an overlay, which covers
+  the tab just the same and leaves those keys alone. Opening the picker a second time in a
+  workspace focuses the one already open instead of stacking another over it.
+
 ## [0.1.1] - 2026-08-07
 
 ### Fixed

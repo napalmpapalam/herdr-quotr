@@ -32,7 +32,7 @@ use ratatui::{
 pub fn render(f: &mut Frame, view: &View) -> Painted {
     let [body, footer] =
         Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(f.area());
-    // The theme's own ground, under everything: the popup is full-screen, so it cannot borrow
+    // The theme's own ground, under everything: the picker is full-screen, so it cannot borrow
     // the terminal's and stay legible across light and dark themes.
     f.render_widget(Block::new().style(Style::new().bg(view.palette.base)), f.area());
     let painted = buffer::render(f, body, view);

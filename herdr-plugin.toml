@@ -3,7 +3,7 @@ name = "quotr"
 version = "0.1.1"
 min_herdr_version = "0.8.0"
 platforms = ["macos", "linux"]
-description = "Quote an agent's own response back at it, from a herdr popup."
+description = "Quote an agent's own response back at it, over the focused herdr pane."
 
 # On `herdr plugin install`, download the prebuilt `herdr-quotr` binary for this platform from
 # the matching GitHub Release into $HERDR_PLUGIN_ROOT/bin (no Rust toolchain needed). Skipped by
@@ -17,11 +17,7 @@ command = ["bash", "herdr/install.sh"]
 [[panes]]
 id = "picker"
 title = "quotr"
-placement = "popup"
-# Without these herdr picks its own popup box; the picker wants the whole terminal.
-# Percent-of-terminal or cell counts, popup placement only.
-width = "100%"
-height = "100%"
+placement = "overlay"
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-quotr\""]
 
 [[actions]]
