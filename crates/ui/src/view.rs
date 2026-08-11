@@ -39,6 +39,14 @@ pub struct Banked<'a> {
     pub quote: &'a str,
 }
 
+/// The question being typed, and where its caret sits — a character offset, so the painter
+/// resolves it against the wrapped rows the same way it resolves a caret in the buffer.
+#[derive(Debug, Clone, Copy)]
+pub struct Question<'a> {
+    pub text: &'a str,
+    pub caret: usize,
+}
+
 /// Where the buffer starts painting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scroll {
@@ -70,7 +78,7 @@ pub struct View<'a> {
     pub banked: &'a [Banked<'a>],
     pub scroll: Scroll,
     /// The question being typed, when the box is open.
-    pub question: Option<&'a str>,
+    pub question: Option<Question<'a>>,
     pub status: &'a str,
 }
 

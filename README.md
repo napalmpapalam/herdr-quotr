@@ -120,7 +120,8 @@ The mouse is the primary input; the keyboard is a full fallback.
 | `s` | bank the live selection, then send the batch |
 | `q` | quit |
 
-In the question box: Enter banks, Esc goes back, Ctrl+U clears.
+In the question box: Enter banks, Esc goes back, Ctrl+U clears. The caret moves with the arrows
+and Home/End, and Backspace and Delete cut on either side of it.
 
 Mouse capture is on while the picker is up, so the terminal's own text selection — and copying
 out of the picker — is unavailable there.

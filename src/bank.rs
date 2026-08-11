@@ -75,7 +75,7 @@ impl App {
     /// pair `e` reopened — and go back to browsing.
     pub fn bank_pair(&mut self) {
         let Mode::Ask { editing } = self.mode else { return };
-        let question = self.question.trim().to_owned();
+        let question = self.question.text().trim().to_owned();
         let Some(index) = self.store(editing, question) else {
             "nothing selected".clone_into(&mut self.status);
             return;
@@ -120,7 +120,8 @@ impl App {
             "no banked pair here".clone_into(&mut self.status);
             return;
         };
-        self.question = self.bank.get(index).map(|pair| pair.question.clone()).unwrap_or_default();
+        self.question
+            .set(self.bank.get(index).map(|pair| pair.question.clone()).unwrap_or_default());
         self.mode = Mode::Ask { editing: Some(index) };
     }
 

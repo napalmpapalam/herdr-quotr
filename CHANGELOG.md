@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The question box has a caret.** `←`/`→` move through the question a character at a time,
+  `Home`/`End` jump to its ends, and `Delete` cuts the character under the caret as `Backspace`
+  cuts the one before it — a typo in the middle of a long question no longer means retyping the
+  tail. Typing inserts where the caret sits, and a box taller than the pane scrolls to the row
+  the caret is on.
+
 ### Fixed
 
 - **herdr's own keybindings keep working while the picker is up.** The picker opened as a

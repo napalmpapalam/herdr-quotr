@@ -18,7 +18,7 @@ pub use crate::{
     markdown::analyze,
     style::LineStyle,
     theme::{NAMES as THEMES, Palette, Theme},
-    view::{Banked, Hit, Markup, Painted, Scroll, SourceLine, View},
+    view::{Banked, Hit, Markup, Painted, Question, Scroll, SourceLine, View},
 };
 
 use ratatui::{

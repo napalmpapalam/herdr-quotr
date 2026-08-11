@@ -4,6 +4,7 @@ pub mod app;
 mod bank;
 mod config;
 mod nav;
+mod question;
 mod send;
 mod stash;
 
@@ -87,7 +88,9 @@ fn draw(terminal: &mut DefaultTerminal, app: &App) -> Result<Painted> {
         selection: app.selection(),
         banked: &banked,
         scroll: if app.opening { ui::Scroll::Bottom } else { ui::Scroll::From(app.scroll) },
-        question: app.asking().then_some(app.question.as_str()),
+        question: app
+            .asking()
+            .then(|| ui::Question { text: app.question.text(), caret: app.question.caret() }),
         status: &app.status,
     };
     let mut painted = Painted::default();
@@ -128,9 +131,14 @@ fn handle_ask_key(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => app.cancel_ask(),
         KeyCode::Enter => app.bank_pair(),
-        KeyCode::Backspace => app.backspace(),
+        KeyCode::Backspace => app.question.backspace(),
+        KeyCode::Delete => app.question.delete(),
+        KeyCode::Left => app.question.left(),
+        KeyCode::Right => app.question.right(),
+        KeyCode::Home => app.question.home(),
+        KeyCode::End => app.question.end(),
         KeyCode::Char('u') if ctrl => app.question.clear(),
-        KeyCode::Char(c) if !ctrl => app.type_char(c),
+        KeyCode::Char(c) if !ctrl => app.question.insert(c),
         _ => {}
     }
 }

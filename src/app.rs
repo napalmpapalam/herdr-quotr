@@ -8,7 +8,7 @@ use markup::Pos;
 use transcript::{SessionId, Transcript};
 use ui::{LineStyle, Painted, Theme};
 
-use crate::{bank::Bank, config, stash};
+use crate::{bank::Bank, config, question::Question, stash};
 
 /// Read a transcript straight from a file instead of resolving one through herdr — how the
 /// picker is driven outside a pane, for the demo recording and for working on the UI.
@@ -61,7 +61,7 @@ pub struct App {
     /// Pairs finished and waiting for `S`.
     pub bank: Bank,
     pub mode: Mode,
-    pub question: String,
+    pub question: Question,
     /// What the last frame put on screen — drives scrolling and mouse hit testing.
     pub painted: Painted,
     pub status: String,
@@ -97,7 +97,7 @@ impl App {
             grain: Grain::Char,
             bank: Bank::default(),
             mode: Mode::Browse,
-            question: String::new(),
+            question: Question::default(),
             painted: Painted::default(),
             status,
             should_quit: false,
@@ -173,14 +173,6 @@ impl App {
 
     pub fn cancel_ask(&mut self) {
         self.mode = Mode::Browse;
-    }
-
-    pub fn type_char(&mut self, c: char) {
-        self.question.push(c);
-    }
-
-    pub fn backspace(&mut self) {
-        self.question.pop();
     }
 
     /// Pick up a batch a previous run parked because the agent was blocked.
