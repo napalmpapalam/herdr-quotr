@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-11
+
 ### Added
 
 - **The question box has a caret.** `←`/`→` move through the question a character at a time,
@@ -56,6 +58,7 @@ First release.
   swallowed silently, so the batch is written to the plugin's state dir and restored on the
   next open instead.
 
-[Unreleased]: https://github.com/napalmpapalam/herdr-quotr/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/napalmpapalam/herdr-quotr/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/napalmpapalam/herdr-quotr/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/napalmpapalam/herdr-quotr/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/napalmpapalam/herdr-quotr/releases/tag/v0.1.0
